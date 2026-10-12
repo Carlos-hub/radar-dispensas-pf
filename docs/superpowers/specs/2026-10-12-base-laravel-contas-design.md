@@ -10,9 +10,12 @@ O Radar de Dispensas PF hoje é uma ferramenta local de uma pessoa: PHP puro, se
 O SaaS foi dividido em quatro etapas, cada uma com spec e plano próprios:
 
 1. **Base em Laravel com contas** (este documento)
-2. Montador de proposta
-3. Publicidade e páginas legais (privacidade, termos, consentimento de cookies)
-4. Produção (domínio, HTTPS, hospedagem, e-mail transacional)
+2. Montador de proposta, com guia de cadastro da pessoa física nos sistemas oficiais
+3. Alertas por e-mail de novas dispensas
+4. Publicidade e páginas legais (privacidade, termos, consentimento de cookies)
+5. Produção (domínio, HTTPS, hospedagem, e-mail transacional, proteção contra robôs no cadastro, backup do banco, monitoramento da sincronização)
+
+**Restrição de lançamento:** o site só é aberto ao público depois da etapa 4, porque esta etapa já coleta nome e e-mail e ainda não tem política de privacidade nem termos de uso.
 
 ## Objetivo desta etapa
 
@@ -43,6 +46,8 @@ Ao final, o projeto roda em Laravel com `docker compose up`, e:
 | `scheduler` | Mesma imagem, rodando `php artisan schedule:work` |
 | `db` | PostgreSQL 16 com volume persistente e extensão `unaccent` |
 | `mailpit` | Captura os e-mails em desenvolvimento, com caixa de entrada em `localhost:8025` |
+
+Ao subir, o `app` aplica as migrations pendentes e o `scheduler` roda uma sincronização imediata antes de entrar no ciclo de 15 minutos, para que uma instalação nova não fique com o radar vazio.
 
 Sessão e cache usam o driver `database`. Os e-mails são enviados de forma síncrona; não há worker de fila nesta etapa. O fuso da aplicação é `America/Sao_Paulo`, porque o PNCP devolve datas no horário de Brasília sem fuso.
 
@@ -107,7 +112,7 @@ Colunas padrão do Laravel, com duas mudanças: `password` passa a aceitar nulo 
 O comando `pncp:sync` roda a cada 15 minutos, sem sobreposição de execuções.
 
 1. Consulta `/contratacoes/proposta` com `codigoModalidadeContratacao=8`, `dataFinal` igual a hoje mais 90 dias, sem UF, 50 registros por página.
-2. Percorre todas as páginas, com teto de segurança de 400 páginas (20.000 registros). Se o teto for atingido, registra um aviso no log.
+2. Percorre todas as páginas, com teto de segurança de 400 páginas (20.000 registros). Se o teto for atingido, registra um aviso no log. Em 2026-10-12 a consulta devolvia 3.411 registros em 69 páginas, cerca de 1 segundo por página.
 3. Classifica cada registro com o `ClassificadorPf` e grava por `pncp_id` (insere ou atualiza), marcando `sincronizado_em`.
 4. Se o PNCP falhar no meio, o que já foi gravado permanece, o erro vai para o log e a próxima execução tenta de novo. O comando termina com código de erro.
 
@@ -145,11 +150,20 @@ Cada ficha mantém o visual atual. Para quem está logado, o botão mostra "Salv
 
 ### Página da dispensa
 
-Mostra todos os campos da ficha, o motivo da classificação, o link para o aviso no PNCP e o botão que leva ao sistema de origem para enviar a proposta. Dispensa encerrada continua visível, marcada como encerrada e sem o botão de salvar.
+Mostra todos os campos da ficha, o motivo da classificação com o aviso de que ela é automática e não substitui a leitura do aviso oficial, o link para o aviso no PNCP e o botão que leva ao sistema de origem para enviar a proposta. Dispensa encerrada continua visível, marcada como encerrada e sem o botão de salvar.
 
 ### Minhas candidaturas
 
 Igual à aba atual: filtro por status com contadores, seletor de status, campo de notas e remover. Os formulários funcionam sem JavaScript; com JavaScript, status e notas são gravados ao alterar, sem recarregar a página.
+
+## Indexação por buscadores
+
+O tráfego orgânico é a fonte de audiência do produto, então as páginas públicas já nascem preparadas:
+
+- Cada página de dispensa tem `<title>` e descrição próprios, montados a partir do objeto, do órgão e do município.
+- O radar sem filtros e o radar por UF (`/?uf=SC`) são indexáveis e têm URL canônica.
+- Qualquer outra combinação de filtros e as páginas 2 em diante recebem `noindex`, para não gerar conteúdo duplicado.
+- `/sitemap.xml` lista o radar, o radar de cada UF e as dispensas abertas. `robots.txt` aponta para ele e bloqueia as rotas de conta.
 
 ## Regras de conta
 
@@ -174,15 +188,20 @@ Igual à aba atual: filtro por status com contadores, seletor de status, campo d
 | `ClassificadorPf` | unitário | Cada ramo da regra de aderência (engenharia, bens, PF explícito, categoria sem "empresa", categoria com "empresa", sem categoria), cada categoria, limpeza do prefixo do objeto, corte do complemento |
 | `pncp:sync` | integração, HTTP simulado | Múltiplas páginas, atualização de registro existente, resposta 204, falha no meio preservando o que foi gravado |
 | Radar | fluxo | Cada filtro, ocultação de encerradas e de não sincronizadas, paginação, resumo |
+| Indexação | fluxo | `noindex` nas combinações de filtro e nas páginas seguintes, conteúdo do sitemap |
 | Contas | fluxo | Cadastro, confirmação, login, recuperação de senha, login Google novo e vinculado a conta existente |
 | Candidaturas | fluxo | Salvar exige login e confirmação, duplicata não cria segundo registro, alterar e remover, 404 para candidatura de outro usuário |
+
+## Integração contínua
+
+Um workflow do GitHub Actions roda a suíte de testes a cada push e pull request.
 
 ## Fora desta etapa
 
 - Montador de proposta e dados pessoais que ele exige (CPF, endereço)
-- Espaços de anúncio, política de privacidade, termos de uso e consentimento de cookies
-- Hospedagem, domínio, HTTPS e provedor de e-mail de produção
-- Alertas por e-mail de novas dispensas
+- Espaços de anúncio, política de privacidade, termos de uso e consentimento de cookies (etapa 4)
+- Hospedagem, domínio, HTTPS, provedor de e-mail de produção, captcha no cadastro, backup e monitoramento (etapa 5)
+- Alertas por e-mail de novas dispensas (etapa 3)
 - Limpeza de dispensas antigas
 
 ## Dependência externa
