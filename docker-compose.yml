@@ -1,33 +1,47 @@
+x-app: &app
+  build:
+    context: .
+    args:
+      UID: ${UID:-1000}
+      GID: ${GID:-1000}
+  volumes:
+    - .:/var/www/html
+  restart: unless-stopped
+
 services:
   app:
-    build: .
-    ports:
-      - "${APP_PORT:-8080}:80"
+    <<: *app
     environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-radar}
-      DB_USER: ${DB_USER:-radar}
-      DB_PASSWORD: ${DB_PASSWORD:-radar}
-    volumes:
-      # código montado para editar sem rebuild
-      - ./public:/var/www/html/public
-      - ./src:/var/www/html/src
+      PREPARAR_APP: "1"
+    ports:
+      - "${APP_PORT:-8081}:80"
     depends_on:
       db:
         condition: service_healthy
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/up > /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  scheduler:
+    <<: *app
+    # sincroniza na subida para o radar não nascer vazio, depois segue o agendamento
+    command: ["sh", "-c", "runuser -u www-data -- php artisan pncp:sync; exec runuser -u www-data -- php artisan schedule:work"]
+    depends_on:
+      app:
+        condition: service_healthy
 
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ${DB_NAME:-radar}
-      POSTGRES_USER: ${DB_USER:-radar}
+      POSTGRES_DB: ${DB_DATABASE:-radar}
+      POSTGRES_USER: ${DB_USERNAME:-radar}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-radar}
       TZ: America/Sao_Paulo
     ports:
       # só na máquina local, para consultar com psql/DBeaver
-      - "127.0.0.1:${DB_PORT:-5433}:5432"
+      - "127.0.0.1:${FORWARD_DB_PORT:-5433}:5432"
     volumes:
       - dbdata:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -36,6 +50,12 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:8025:8025"
     restart: unless-stopped
 
 volumes:
