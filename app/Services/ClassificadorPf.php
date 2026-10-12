@@ -54,7 +54,8 @@ class ClassificadorPf
 
         $cnpj = (string) ($c['orgaoEntidade']['cnpj'] ?? '');
         $sequencial = (string) ($c['sequencialCompra'] ?? '');
-        $valor = (float) ($c['valorTotalEstimado'] ?? 0);
+        $valor = self::valor($c['valorTotalEstimado'] ?? null);
+        $esferaId = $c['orgaoEntidade']['esferaId'] ?? 'N';
 
         return [
             'pncp_id' => (string) ($c['numeroControlePNCP'] ?? ($cnpj !== '' ? "$cnpj-$sequencial" : '')),
@@ -64,17 +65,56 @@ class ClassificadorPf
             'unidade' => (string) ($c['unidadeOrgao']['nomeUnidade'] ?? ''),
             'municipio' => (string) ($c['unidadeOrgao']['municipioNome'] ?? ''),
             'uf' => mb_substr((string) ($c['unidadeOrgao']['ufSigla'] ?? ''), 0, 2),
-            'esfera' => self::ESFERAS[$c['orgaoEntidade']['esferaId'] ?? 'N'] ?? 'Não informada',
-            'valor' => $valor > 0 ? $valor : null,
-            'abre_em' => ($c['dataAberturaProposta'] ?? null) ?: null,
-            'encerra_em' => ($c['dataEncerramentoProposta'] ?? null) ?: null,
+            'esfera' => self::ESFERAS[is_string($esferaId) ? $esferaId : 'N'] ?? 'Não informada',
+            'valor' => $valor,
+            'abre_em' => self::data($c['dataAberturaProposta'] ?? null),
+            'encerra_em' => self::data($c['dataEncerramentoProposta'] ?? null),
             'amparo' => $amparo,
             'disputa' => (string) ($c['modoDisputaNome'] ?? ''),
             'link_pncp' => $cnpj !== '' ? "https://pncp.gov.br/app/editais/$cnpj/" . ($c['anoCompra'] ?? '') . "/$sequencial" : null,
-            'link_origem' => ($c['linkSistemaOrigem'] ?? '') ?: null,
+            'link_origem' => self::linkOrigem($c['linkSistemaOrigem'] ?? null),
             'categorias' => $categorias,
             'fit' => $fit->value,
             'motivo' => $motivo,
         ];
+    }
+
+    /** Maior valor que cabe em numeric(15,2). */
+    private const VALOR_MAXIMO = 9_999_999_999_999.99;
+
+    /** Valor estimado válido (positivo, finito e que cabe na coluna) ou null, que a tela mostra como "valor sigiloso". */
+    private static function valor(mixed $bruto): ?float
+    {
+        $valor = is_numeric($bruto) ? (float) $bruto : 0.0;
+
+        return is_finite($valor) && $valor > 0 && $valor <= self::VALOR_MAXIMO ? $valor : null;
+    }
+
+    /** Data ISO 8601 (com ou sem hora e fuso) que existe no calendário; qualquer outra coisa vira null em vez de ir crua ao banco. */
+    private static function data(mixed $bruto): ?string
+    {
+        if (! is_string($bruto)) {
+            return null;
+        }
+        $texto = trim($bruto);
+        $ok = preg_match('/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}(?::?\d{2})?)?)?$/', $texto, $m);
+
+        return $ok && checkdate((int) $m[2], (int) $m[3], (int) $m[1]) && (int) ($m[4] ?? 0) <= 23 && (int) ($m[5] ?? 0) <= 59 && (int) ($m[6] ?? 0) <= 59
+            ? $texto
+            : null;
+    }
+
+    /** Link de origem como texto; endereço sem esquema (contratos.example.gov.br/x) ganha https://. O resto segue como veio. */
+    private static function linkOrigem(mixed $bruto): ?string
+    {
+        if (! is_string($bruto) || trim($bruto) === '') {
+            return null;
+        }
+        $link = trim($bruto);
+        if (! preg_match('#^[a-z][a-z0-9+.-]*://#i', $link) && preg_match('#^[a-z0-9.-]+\.[a-z]{2,}(/|$)#i', $link)) {
+            return 'https://' . $link;
+        }
+
+        return $link;
     }
 }

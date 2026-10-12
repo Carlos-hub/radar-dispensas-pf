@@ -6,10 +6,16 @@ use App\Enums\Fit;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Carbon\Exceptions\InvalidFormatException;
 
 class Dispensa extends Model
 {
     use HasFactory;
+
+    /** Chave do cache com a data da última sincronização bem-sucedida (gravada por pncp:sync). */
+    public const CHAVE_ULTIMA_SINCRONIZACAO = 'pncp.ultima_sincronizacao';
 
     protected $guarded = [];
 
@@ -25,12 +31,26 @@ class Dispensa extends Model
         ];
     }
 
-    /** Com prazo em aberto e devolvidas pelo PNCP nas últimas 24 horas. */
+    /**
+     * Com prazo em aberto e devolvidas pelo PNCP até 24 horas antes da última sincronização bem-sucedida.
+     * A janela conta dessa sincronização, não do relógio: se o PNCP ficar fora do ar por dias, a lista não esvazia.
+     * Sem nenhuma sincronização registrada, conta do relógio.
+     */
     public function scopeAbertas(Builder $query): void
     {
         $query
             ->where(fn (Builder $q) => $q->whereNull('encerra_em')->orWhere('encerra_em', '>', now()))
-            ->where('sincronizado_em', '>=', now()->subDay());
+            ->where('sincronizado_em', '>=', self::referenciaDaJanela()->subDay());
+    }
+
+    private static function referenciaDaJanela(): Carbon
+    {
+        $ultima = Cache::get(self::CHAVE_ULTIMA_SINCRONIZACAO);
+        try {
+            return $ultima ? Carbon::parse($ultima) : now();
+        } catch (InvalidFormatException) {
+            return now();
+        }
     }
 
     public function encerrada(): bool

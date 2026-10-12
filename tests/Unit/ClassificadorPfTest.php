@@ -182,4 +182,24 @@ class ClassificadorPfTest extends TestCase
 
         $this->assertSame('', $l['pncp_id']);
     }
+
+    #[DataProvider('links')]
+    public function test_link_de_origem(?string $entrada, ?string $esperado): void
+    {
+        $this->assertSame($esperado, $this->classificar(['linkSistemaOrigem' => $entrada])['link_origem']);
+    }
+
+    public static function links(): array
+    {
+        return [
+            'endereço sem esquema ganha https' => ['contratosgov.com.br/pregao/10', 'https://contratosgov.com.br/pregao/10'],
+            'só o domínio' => ['sai.io.org.br', 'https://sai.io.org.br'],
+            'domínio em maiúsculas' => ['SAI.IO.ORG.BR/x', 'https://SAI.IO.ORG.BR/x'],
+            'https fica como está' => ['https://compras.example.gov.br/10', 'https://compras.example.gov.br/10'],
+            'http fica como está' => ['http://compras.example.gov.br/10', 'http://compras.example.gov.br/10'],
+            'javascript fica como está' => ['javascript:alert(1)', 'javascript:alert(1)'],
+            'palavra solta fica como está' => ['indisponivel', 'indisponivel'],
+            'vazio vira null' => ['', null],
+        ];
+    }
 }

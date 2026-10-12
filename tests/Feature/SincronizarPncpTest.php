@@ -7,7 +7,9 @@ use App\Models\Dispensa;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
 use Tests\TestCase;
 
@@ -250,5 +252,147 @@ class SincronizarPncpTest extends TestCase
         $this->assertSame(3, Dispensa::count());
         $this->assertSame(2, $this->chamadasDaPagina(2));
         $this->assertSame(1, $this->chamadasDaPagina(3));
+    }
+
+    // --- B1: exclusão mútua dentro do próprio comando ---
+
+    public function test_com_o_lock_ocupado_nao_chama_o_pncp_e_termina_sem_erro(): void
+    {
+        Http::fake();
+        $lock = Cache::lock(SincronizarPncp::CHAVE_LOCK, 60);
+        $this->assertTrue($lock->get());
+
+        $this->artisan('pncp:sync')->assertSuccessful()->expectsOutputToContain('já está em andamento');
+
+        Http::assertNothingSent();
+        $this->assertNull(Cache::get(SincronizarPncp::CHAVE_ULTIMA));
+        $this->assertTrue($lock->isOwnedByCurrentProcess(), 'o comando não pode soltar o lock de outro processo');
+    }
+
+    public function test_lock_e_liberado_apos_execucao_normal(): void
+    {
+        $this->simularPncp([1 => [$this->registro('a-1')]]);
+
+        $this->artisan('pncp:sync')->assertSuccessful();
+
+        $this->assertLockLivre();
+        $this->artisan('pncp:sync')->assertSuccessful();
+    }
+
+    public function test_lock_e_liberado_apos_execucao_com_falha(): void
+    {
+        // 4 tentativas falham na primeira execução; a segunda recebe uma página boa
+        $this->simularPncp([1 => ['__seq' => [500, 500, 500, 500, [$this->registro('a-1')]]]]);
+
+        $this->artisan('pncp:sync')->assertFailed();
+
+        $this->assertLockLivre();
+        $this->artisan('pncp:sync')->assertSuccessful();
+        $this->assertSame(1, Dispensa::count());
+    }
+
+    public function test_agendamento_expira_o_mutex_em_30_minutos(): void
+    {
+        $evento = collect(app(\Illuminate\Console\Scheduling\Schedule::class)->events())
+            ->first(fn ($e) => str_contains($e->command, 'pncp:sync'));
+
+        $this->assertNotNull($evento);
+        $this->assertTrue($evento->withoutOverlapping);
+        $this->assertSame(30, $evento->expiresAt);
+    }
+
+    private function assertLockLivre(): void
+    {
+        $lock = Cache::lock(SincronizarPncp::CHAVE_LOCK, 10);
+        $this->assertTrue($lock->get(), 'o lock deveria estar livre');
+        $lock->release();
+    }
+
+    // --- B2: um registro ou uma página ruim não derruba a sincronização ---
+
+    public function test_registro_envenenado_e_pulado_e_os_bons_sao_gravados(): void
+    {
+        $this->simularPncp([1 => [
+            $this->registro('bom-1'),
+            ['numeroControlePNCP' => 'ruim-1', 'objetoCompra' => ['nao', 'e', 'texto']] + $this->registro('ruim-1'),
+            $this->registro('bom-2'),
+        ]]);
+        Log::spy();
+
+        $this->artisan('pncp:sync')->assertSuccessful();
+
+        $this->assertEqualsCanonicalizing(['bom-1', 'bom-2'], Dispensa::pluck('pncp_id')->all());
+        $this->assertNotNull(Cache::get(SincronizarPncp::CHAVE_ULTIMA));
+        Log::shouldHaveReceived('warning')->withArgs(fn ($msg, $ctx = []) => ($ctx['pncp_id'] ?? null) === 'ruim-1')->once();
+    }
+
+    public function test_data_invalida_vira_nula(): void
+    {
+        $this->simularPncp([1 => [
+            ['dataAberturaProposta' => 'ontem de manhã', 'dataEncerramentoProposta' => '2026-13-45T99:00:00'] + $this->registro('a-1'),
+            ['dataAberturaProposta' => ['x'], 'dataEncerramentoProposta' => '2026-10-20T08:00:00'] + $this->registro('a-2'),
+        ]]);
+
+        $this->artisan('pncp:sync')->assertSuccessful();
+
+        $a1 = Dispensa::where('pncp_id', 'a-1')->firstOrFail();
+        $this->assertNull($a1->abre_em);
+        $this->assertNull($a1->encerra_em);
+        $a2 = Dispensa::where('pncp_id', 'a-2')->firstOrFail();
+        $this->assertNull($a2->abre_em);
+        $this->assertSame('2026-10-20 08:00', $a2->encerra_em->format('Y-m-d H:i'));
+    }
+
+    public function test_valor_fora_da_faixa_vira_nulo(): void
+    {
+        $this->simularPncp([1 => [
+            ['valorTotalEstimado' => 1e14] + $this->registro('a-1'),
+            ['valorTotalEstimado' => 9999999999999.99] + $this->registro('a-2'),
+            ['valorTotalEstimado' => 'abc'] + $this->registro('a-3'),
+        ]]);
+
+        $this->artisan('pncp:sync')->assertSuccessful();
+
+        $this->assertNull(Dispensa::where('pncp_id', 'a-1')->firstOrFail()->valor);
+        $this->assertSame(9999999999999.99, Dispensa::where('pncp_id', 'a-2')->firstOrFail()->valor);
+        $this->assertNull(Dispensa::where('pncp_id', 'a-3')->firstOrFail()->valor);
+    }
+
+    public function test_esfera_nao_escalar_nao_derruba_a_sincronizacao(): void
+    {
+        $registro = $this->registro('a-1');
+        $registro['orgaoEntidade']['esferaId'] = ['M'];
+        $this->simularPncp([1 => [$registro, $this->registro('a-2')]]);
+
+        $this->artisan('pncp:sync')->assertSuccessful();
+
+        $this->assertSame(2, Dispensa::count());
+        $this->assertSame('Não informada', Dispensa::where('pncp_id', 'a-1')->firstOrFail()->esfera);
+    }
+
+    public function test_link_de_origem_nao_textual_vira_nulo(): void
+    {
+        $this->simularPncp([1 => [['linkSistemaOrigem' => ['http://x']] + $this->registro('a-1')]]);
+
+        $this->artisan('pncp:sync')->assertSuccessful();
+
+        $this->assertNull(Dispensa::firstOrFail()->link_origem);
+    }
+
+    public function test_pagina_que_o_banco_recusa_nao_impede_as_seguintes_mas_a_execucao_falha(): void
+    {
+        // restrição só deste teste (o DDL do PostgreSQL é transacional e some no rollback): o upsert da página 2 falha
+        DB::statement("alter table dispensas add constraint sem_veneno check (objeto <> 'VENENO')");
+        $this->simularPncp([
+            1 => [$this->registro('p1-1')],
+            2 => [$this->registro('p2-1', 'VENENO')],
+            3 => [$this->registro('p3-1')],
+        ]);
+
+        $this->artisan('pncp:sync')->assertFailed();
+
+        $this->assertEqualsCanonicalizing(['p1-1', 'p3-1'], Dispensa::pluck('pncp_id')->all());
+        $this->assertNull(Cache::get(SincronizarPncp::CHAVE_ULTIMA));
+        $this->assertLockLivre();
     }
 }

@@ -199,4 +199,44 @@ class RadarTest extends TestCase
         Cache::forget(SincronizarPncp::CHAVE_ULTIMA);
         $this->get('/')->assertSee('podem estar desatualizados');
     }
+
+    // --- B3: a janela de 24 h conta da última sincronização bem-sucedida ---
+
+    public function test_apos_dias_sem_sincronizar_a_lista_e_o_sitemap_continuam_com_o_que_havia(): void
+    {
+        $ultima = now()->subDays(3);
+        Cache::forever(SincronizarPncp::CHAVE_ULTIMA, $ultima->toIso8601String());
+        $visivel = $this->dispensa('Palestra da ultima rodada', ['sincronizado_em' => $ultima]);
+        $limite = $this->dispensa('Palestra no limite da janela', ['sincronizado_em' => $ultima->copy()->subHours(23)]);
+        $fora = $this->dispensa('Palestra fora da janela', ['sincronizado_em' => $ultima->copy()->subHours(25)]);
+
+        $this->get('/')
+            ->assertSee('Palestra da ultima rodada')
+            ->assertSee('Palestra no limite da janela')
+            ->assertDontSee('Palestra fora da janela')
+            ->assertSee('podem estar desatualizados');
+
+        $sitemap = $this->get('/sitemap.xml')->getContent();
+        $this->assertStringContainsString(route('dispensas.show', $visivel), $sitemap);
+        $this->assertStringContainsString(route('dispensas.show', $limite), $sitemap);
+        $this->assertStringNotContainsString(route('dispensas.show', $fora), $sitemap);
+    }
+
+    public function test_dispensa_encerrada_continua_escondida_mesmo_na_janela_antiga(): void
+    {
+        $ultima = now()->subDays(3);
+        Cache::forever(SincronizarPncp::CHAVE_ULTIMA, $ultima->toIso8601String());
+        $this->dispensa('Palestra ja encerrada', ['sincronizado_em' => $ultima, 'encerra_em' => now()->subHour()]);
+
+        $this->get('/')->assertDontSee('Palestra ja encerrada');
+    }
+
+    public function test_sem_sincronizacao_registrada_a_janela_conta_do_relogio(): void
+    {
+        Cache::forget(SincronizarPncp::CHAVE_ULTIMA);
+        $this->dispensa('Palestra de agora');
+        $this->dispensa('Palestra de anteontem', ['sincronizado_em' => now()->subDays(2)]);
+
+        $this->get('/')->assertSee('Palestra de agora')->assertDontSee('Palestra de anteontem');
+    }
 }
