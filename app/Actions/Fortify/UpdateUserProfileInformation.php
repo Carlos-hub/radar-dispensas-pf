@@ -4,6 +4,7 @@ namespace App\Actions\Fortify;
 
 use App\Models\User;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -11,6 +12,9 @@ use Laravel\Fortify\Contracts\UpdatesUserProfileInformation;
 
 class UpdateUserProfileInformation implements UpdatesUserProfileInformation
 {
+    /** Trocas de e-mail por usuário a cada hora: cada uma dispara uma mensagem de verificação a um endereço qualquer. */
+    public const LIMITE_TROCAS_POR_HORA = 5;
+
     /**
      * Validate and update the given user's profile information.
      *
@@ -20,6 +24,14 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
      */
     public function update(User $user, array $input): void
     {
+        $trocaEmail = isset($input['email']) && $input['email'] !== $user->email;
+        $chave = 'troca-email:' . $user->id;
+        if ($trocaEmail && RateLimiter::tooManyAttempts($chave, self::LIMITE_TROCAS_POR_HORA)) {
+            throw ValidationException::withMessages([
+                'email' => 'Muitas trocas de e-mail em pouco tempo. Tente de novo mais tarde.',
+            ])->errorBag('updateProfileInformation');
+        }
+
         Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
 
@@ -31,6 +43,10 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
                 Rule::unique('users')->ignore($user->id),
             ],
         ])->validateWithBag('updateProfileInformation');
+
+        if ($input['email'] !== $user->email) {
+            RateLimiter::hit($chave, 3600);
+        }
 
         if ($input['email'] !== $user->email &&
             $user instanceof MustVerifyEmail) {

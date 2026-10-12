@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Fortify\UpdateUserProfileInformation;
 use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
@@ -157,5 +158,52 @@ class ContasTest extends TestCase
         $this->actingAs($user)->delete('/perfil', ['email_confirmacao' => $user->email])->assertRedirect('/');
         $this->assertDatabaseMissing('users', ['id' => $user->id]);
         $this->assertGuest();
+    }
+
+    public function test_trocar_o_email_zera_a_confirmacao_e_envia_verificacao_ao_novo_endereco(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['email' => 'ana@example.com']);
+
+        $this->actingAs($user)->put('/user/profile-information', ['name' => 'Ana', 'email' => 'nova@example.com'])
+            ->assertSessionHasNoErrors();
+
+        $user->refresh();
+        $this->assertSame('nova@example.com', $user->email);
+        $this->assertNull($user->email_verified_at);
+        Notification::assertSentTo($user, VerifyEmail::class);
+        Notification::assertSentTimes(VerifyEmail::class, 1);
+    }
+
+    public function test_troca_de_email_tem_limite_de_5_por_hora_por_usuario(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['email' => 'e0@example.com']);
+
+        for ($i = 1; $i <= UpdateUserProfileInformation::LIMITE_TROCAS_POR_HORA; $i++) {
+            $this->actingAs($user)->put('/user/profile-information', ['name' => 'Ana', 'email' => "e$i@example.com"])
+                ->assertSessionHasNoErrors();
+        }
+        Notification::assertSentTimes(VerifyEmail::class, 5);
+
+        $this->actingAs($user->fresh())->put('/user/profile-information', ['name' => 'Ana', 'email' => 'e6@example.com'])
+            ->assertSessionHasErrorsIn('updateProfileInformation', 'email');
+
+        $this->assertSame('e5@example.com', $user->fresh()->email);
+        Notification::assertSentTimes(VerifyEmail::class, 5);
+    }
+
+    public function test_alterar_so_o_nome_nunca_e_barrado_pelo_limite(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['email' => 'ana@example.com']);
+
+        for ($i = 1; $i <= UpdateUserProfileInformation::LIMITE_TROCAS_POR_HORA + 2; $i++) {
+            $this->actingAs($user)->put('/user/profile-information', ['name' => "Ana $i", 'email' => 'ana@example.com'])
+                ->assertSessionHasNoErrors();
+        }
+
+        $this->assertSame('Ana 7', $user->fresh()->name);
+        Notification::assertNothingSent();
     }
 }
