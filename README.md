@@ -1,6 +1,6 @@
 # Radar de Dispensas PF
 
-Consulta as dispensas de licitação com propostas abertas no [PNCP](https://pncp.gov.br), classifica quais uma pessoa física consegue executar sem CNPJ e guarda as escolhidas para acompanhar a candidatura (status e notas).
+Mostra as dispensas de licitação com propostas abertas no [PNCP](https://pncp.gov.br), classifica quais uma pessoa física consegue executar sem CNPJ e permite que cada pessoa crie uma conta para salvar dispensas e acompanhar as suas candidaturas. A proposta é sempre enviada no sistema oficial de cada órgão; o site só direciona.
 
 ## Como rodar
 
@@ -11,79 +11,64 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Abra **http://localhost:8081**.
+Abra **http://localhost:8081**. A primeira subida instala as dependências, cria as tabelas e busca as dispensas no PNCP. O aplicativo responde assim que os contêineres estão saudáveis, e o radar vai se preenchendo conforme a sincronização avança; ela leva cerca de seis minutos para ficar completa.
 
-Na primeira subida o PostgreSQL cria a tabela `candidaturas` a partir de `db/init.sql`. Os dados ficam no volume `dbdata` e sobrevivem a restarts.
+| Endereço | O que é |
+|---|---|
+| http://localhost:8081 | O aplicativo |
+| http://localhost:8025 | Mailpit: caixa de entrada com os e-mails enviados em desenvolvimento |
+| `localhost:5433` | PostgreSQL (banco, usuário e senha `radar`) |
 
 | Comando | O que faz |
 |---|---|
-| `docker compose up -d` | Sobe o app e o banco |
-| `docker compose logs -f app` | Acompanha os logs do PHP/Apache |
+| `docker compose up -d` | Sobe tudo |
+| `docker compose logs -f app scheduler` | Acompanha os logs |
+| `docker compose exec -u www-data app php artisan test` | Roda os testes |
+| `docker compose exec -u www-data app php artisan pncp:sync` | Sincroniza com o PNCP agora |
 | `docker compose down` | Para tudo e mantém os dados |
 | `docker compose down -v` | Para tudo e **apaga o banco** |
 
-O código de `public/` e `src/` é montado como volume: editar PHP, JS ou CSS não exige rebuild. Só refaça o build (`--build`) se mudar o `Dockerfile`.
+Rode sempre `php`, `composer` e `artisan` com `-u www-data`. Como root, os arquivos criados ficam sem permissão de escrita para o Apache.
 
-## Configuração
+## Serviços
 
-Variáveis do `.env`:
+| Serviço | Função |
+|---|---|
+| `app` | Apache + PHP 8.3 servindo o Laravel; aplica as migrations ao subir |
+| `scheduler` | Sincroniza com o PNCP ao subir e depois a cada 15 minutos |
+| `db` | PostgreSQL 16 |
+| `mailpit` | Captura os e-mails de confirmação e de recuperação de senha |
 
-| Variável | Padrão | Uso |
-|---|---|---|
-| `APP_PORT` | `8081` | Porta do app na sua máquina |
-| `DB_PORT` | `5433` | Porta do PostgreSQL na sua máquina (só em `127.0.0.1`) |
-| `DB_NAME` | `radar` | Nome do banco |
-| `DB_USER` | `radar` | Usuário do banco |
-| `DB_PASSWORD` | `radar` | Senha do banco |
+## Login com Google
 
-`DB_NAME`, `DB_USER` e `DB_PASSWORD` só valem na criação do volume. Para trocá-los depois, recrie o banco com `docker compose down -v`.
+É opcional. Sem configurar, o botão não aparece e o resto funciona.
 
-Opcionalmente, `PNCP_BASE` (variável de ambiente do serviço `app`) aponta para outra base da API do PNCP.
+1. No [Google Cloud Console](https://console.cloud.google.com/apis/credentials), crie um ID do cliente OAuth do tipo "Aplicativo da Web".
+2. Em URIs de redirecionamento autorizados, informe `http://localhost:8081/auth/google/callback`.
+3. Preencha `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` no `.env`.
 
-## Como usar
+## Como funciona
 
-- **Radar:** escolha a UF e o prazo, filtre por categoria, valor ou texto, e clique em **Salvar** nas dispensas que quer disputar. A consulta ao PNCP fica em cache por 15 minutos; **Atualizar** força uma nova.
-- **Minhas candidaturas:** mude o status (`Salva`, `Proposta enviada`, `Ganhei`, `Perdi`, `Descartada`), escreva notas (gravadas ao sair do campo) ou remova. A ficha guarda uma cópia do aviso, então continua legível depois que ele sai do PNCP.
-
-A aderência de cada dispensa é uma heurística sobre o texto do objeto. Sempre confira o aviso e o termo de referência antes de enviar proposta.
-
-## Consultar o banco
-
-```bash
-docker compose exec db psql -U radar -d radar
-```
-
-Ou conecte um cliente (DBeaver, TablePlus) em `localhost:5433`, banco, usuário e senha `radar`.
-
-```sql
-SELECT id, objeto, orgao, valor, encerra_em, status, notas
-FROM candidaturas
-ORDER BY encerra_em;
-```
-
-A coluna `aviso` (JSONB) guarda a ficha completa, com links, categorias e motivo da classificação.
+- **Sincronização:** o comando `pncp:sync` busca as dispensas do Brasil todo que encerram em até 90 dias, classifica cada uma e grava na tabela `dispensas`. Como o PNCP limita a taxa de requisições, a sincronização faz poucas consultas em paralelo, com pausas, e tenta de novo quando a resposta é HTTP 429. Uma dispensa que o PNCP para de devolver sai do radar depois de 24 horas.
+- **Classificação:** `app/Services/ClassificadorPf.php` é uma heurística sobre o texto do aviso. Ela não substitui a leitura do aviso oficial.
+- **Radar:** público. Os filtros ficam na URL. Só o radar sem filtro e o radar por UF são indexados pelos buscadores. Quem clica em "Salvar" sem estar logado passa pelo login e volta para a página da dispensa.
+- **Contas:** e-mail e senha (com confirmação de e-mail) ou Google. Só contas confirmadas salvam dispensas. O e-mail do Google só vale quando o Google o informa como verificado, e a conta não é vinculada se já pertencer a outra identidade do Google.
+- **Candidaturas:** cada pessoa vê só as suas, com status e notas.
 
 ## Estrutura
 
 ```
-Dockerfile, docker-compose.yml   PHP 8.3 + Apache e PostgreSQL 16
-db/init.sql                      Criação da tabela candidaturas
-src/pncp.php                     Cliente da API do PNCP, com cache
-src/classificacao.php            Categorias e regra de aderência PF
-src/candidaturas.php             Leitura e escrita no banco
-public/api.php                   API JSON
-public/index.php                 HTML da página
-public/assets/                   app.js e app.css
+app/Services/Pncp/PncpClient.php            Cliente da API do PNCP
+app/Services/ClassificadorPf.php            Categorias e regra de aderência PF
+app/Console/Commands/SincronizarPncp.php    Comando pncp:sync
+app/Support/FiltroRadar.php                 Filtros do radar
+app/Http/Controllers/                       Radar, dispensa, candidaturas, perfil, sitemap, Google
+app/Models/                                 User, Dispensa, Candidatura
+resources/views/                            Telas em Blade
+public/css/app.css, public/js/app.js        Estilos e JavaScript
+docs/superpowers/                           Specs e planos
 ```
 
-## API
+## Antes de abrir ao público
 
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET` | `api.php?r=dispensas&uf=SC&dias=30` | Dispensas abertas, já classificadas. `uf=BR` traz o país todo; `fresh=1` ignora o cache |
-| `GET` | `api.php?r=candidaturas` | Lista as candidaturas salvas |
-| `POST` | `api.php?r=candidaturas` | Salva uma ficha (corpo: o item devolvido por `dispensas`) |
-| `PATCH` | `api.php?r=candidaturas&id=1` | Altera `status` e/ou `notas` |
-| `DELETE` | `api.php?r=candidaturas&id=1` | Remove a candidatura |
-
-Não há autenticação: o projeto é para uso local, por uma pessoa. Não exponha a porta do app na internet.
+Este projeto ainda não tem política de privacidade, termos de uso, consentimento de cookies, proteção contra robôs no cadastro, nem configuração de produção. Não exponha na internet antes dessas etapas.
