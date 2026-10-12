@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 
+use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\CandidaturaController;
 use App\Http\Controllers\DispensaController;
 use App\Http\Controllers\PerfilController;
@@ -32,4 +33,9 @@ Route::middleware('auth')->group(function () {
         Route::delete('/candidaturas/{candidatura}', [CandidaturaController::class, 'destroy'])
             ->whereNumber('candidatura')->name('candidaturas.destroy');
     });
+});
+
+Route::middleware('guest')->group(function () {
+    Route::get('/auth/google', [GoogleController::class, 'redirect'])->name('google.redirect');
+    Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->name('google.callback');
 });

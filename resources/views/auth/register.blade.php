@@ -24,6 +24,10 @@
     </label>
     <button type="submit" class="btn primary">Criar conta</button>
   </form>
+  @if (config('services.google.client_id'))
+    <hr>
+    <a class="btn google" href="{{ route('google.redirect') }}">Entrar com Google</a>
+  @endif
   <p>Já tem conta? <a href="{{ route('login') }}">Entrar</a></p>
 </div>
 @endsection

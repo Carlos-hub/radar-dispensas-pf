@@ -17,6 +17,10 @@
     <label class="toggle"><input type="checkbox" name="remember"> Manter conectado</label>
     <button type="submit" class="btn primary">Entrar</button>
   </form>
+  @if (config('services.google.client_id'))
+    <hr>
+    <a class="btn google" href="{{ route('google.redirect') }}">Entrar com Google</a>
+  @endif
   <p><a href="{{ route('password.request') }}">Esqueci a senha</a> · <a href="{{ route('register') }}">Criar conta grátis</a></p>
 </div>
 @endsection
