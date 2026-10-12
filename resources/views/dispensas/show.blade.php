@@ -4,6 +4,7 @@
 @endphp
 @section('title', \Illuminate\Support\Str::limit($d->objeto, 60) . ' · ' . $d->orgao)
 @section('description', \Illuminate\Support\Str::limit("Dispensa de licitação em {$d->municipio}/{$d->uf}, {$d->orgao}. {$d->valorTexto()}, {$p['txt']}. {$d->objeto}", 155))
+@push('head')<link rel="canonical" href="{{ route('dispensas.show', $d) }}">@endpush
 @section('content')
 <p><a href="{{ route('radar') }}">← Voltar ao radar</a></p>
 

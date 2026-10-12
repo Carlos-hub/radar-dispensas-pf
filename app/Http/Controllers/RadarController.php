@@ -43,6 +43,10 @@ class RadarController extends Controller
             'resumo' => $resumo,
             'categorias' => array_map(fn (array $c) => $c['label'], ClassificadorPf::CATEGORIAS),
             'ultimaSync' => $ultimaSync,
+            // Só o radar sem filtro e o radar por UF entram no índice; o resto seria conteúdo duplicado.
+            'indexavel' => array_diff(array_keys($request->query()), ['uf']) === []
+                && (! $request->has('uf') || $filtro->uf !== null),
+            'canonica' => route('radar') . ($filtro->uf ? '?uf=' . $filtro->uf : ''),
             'desatualizado' => $ultimaSync === null || $ultimaSync->lt(now()->subHour()),
         ]);
     }

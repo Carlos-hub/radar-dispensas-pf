@@ -1,5 +1,12 @@
 @extends('layouts.app')
 @section('title', ($filtro->uf ? "Dispensas de licitação para pessoa física em {$filtro->uf}" : 'Dispensas de licitação para pessoa física') . ' · Radar de Dispensas PF')
+@push('head')
+  @if ($indexavel)
+    <link rel="canonical" href="{{ $canonica }}">
+  @else
+    <meta name="robots" content="noindex, follow">
+  @endif
+@endpush
 @section('content')
 <header class="top">
   <div class="brand">
