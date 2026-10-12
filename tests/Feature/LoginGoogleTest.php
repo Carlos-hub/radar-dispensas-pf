@@ -17,17 +17,29 @@ class LoginGoogleTest extends TestCase
 {
     use RefreshDatabase;
 
+    private ?GoogleUser $perfilDoGoogle = null;
+
+    private bool $providerMockado = false;
+
     protected function setUp(): void
     {
         parent::setUp();
         config(['services.google.client_id' => 'id-de-teste', 'services.google.client_secret' => 'segredo']);
     }
 
-    private function googleDevolve(string $id, string $email, ?string $nome = 'Ana Souza'): void
+    private function googleDevolve(string $id, string $email, ?string $nome = 'Ana Souza', bool $emailVerificado = true): void
     {
-        $perfil = (new GoogleUser)->map(['id' => $id, 'name' => $nome, 'email' => $email]);
+        // Como o GoogleProvider instalado: o dado bruto traz email_verified (e o legado verified_email).
+        $perfil = (new GoogleUser)
+            ->setRaw(['sub' => $id, 'email_verified' => $emailVerificado, 'verified_email' => $emailVerificado])
+            ->map(['id' => $id, 'name' => $nome, 'email' => $email]);
+        $this->perfilDoGoogle = $perfil;
+        if ($this->providerMockado) {
+            return; // o mock já devolve $this->perfilDoGoogle: permite trocar o perfil no meio do teste
+        }
+        $this->providerMockado = true;
         $provider = Mockery::mock(Provider::class);
-        $provider->shouldReceive('user')->andReturn($perfil);
+        $provider->shouldReceive('user')->andReturnUsing(fn () => $this->perfilDoGoogle);
         Socialite::shouldReceive('driver')->with('google')->andReturn($provider);
     }
 
@@ -82,7 +94,7 @@ class LoginGoogleTest extends TestCase
     public function test_vincular_a_conta_nao_confirmada_anula_a_senha_e_encerra_as_sessoes(): void
     {
         // Um terceiro cadastrou o e-mail da Ana com uma senha que ele conhece e nunca confirmou.
-        $user = User::factory()->unverified()->create(['email' => 'ana@example.com', 'password' => Hash::make('senha-do-terceiro')]);
+        $user = User::factory()->unverified()->create(['email' => 'ana@example.com', 'password' => Hash::make('senha-do-terceiro'), 'remember_token' => 'token-do-terceiro']);
         DB::table('sessions')->insert([
             'id' => 'sessao-do-terceiro', 'user_id' => $user->id, 'payload' => '', 'last_activity' => time(),
         ]);
@@ -92,6 +104,7 @@ class LoginGoogleTest extends TestCase
 
         $user->refresh();
         $this->assertNull($user->password);
+        $this->assertNotSame('token-do-terceiro', $user->remember_token);
         $this->assertNotNull($user->email_verified_at);
         $this->assertSame('g-1', $user->google_id);
         $this->assertDatabaseMissing('sessions', ['id' => 'sessao-do-terceiro']);
@@ -146,5 +159,105 @@ class LoginGoogleTest extends TestCase
     public function test_usuario_logado_nao_acessa_o_fluxo_do_google(): void
     {
         $this->actingAs(User::factory()->create())->get('/auth/google/callback')->assertRedirect('/');
+    }
+
+    public function test_email_nao_verificado_no_google_nao_cria_conta(): void
+    {
+        $this->googleDevolve('g-1', 'ana@example.com', 'Ana', false);
+
+        $this->get('/auth/google/callback')->assertRedirect('/login')->assertSessionHasErrors('email');
+        $this->assertSame(0, User::count());
+        $this->assertGuest();
+    }
+
+    public function test_email_nao_verificado_no_google_nao_vincula_conta_existente(): void
+    {
+        $user = User::factory()->create(['email' => 'ana@example.com', 'password' => Hash::make('senha-dela-1')]);
+        $this->googleDevolve('g-1', 'ana@example.com', 'Ana', false);
+
+        $this->get('/auth/google/callback')->assertRedirect('/login');
+
+        $this->assertNull($user->fresh()->google_id);
+        $this->assertTrue(Hash::check('senha-dela-1', $user->fresh()->password));
+        $this->assertGuest();
+    }
+
+    public function test_email_nao_verificado_mas_google_id_ja_vinculado_entra_na_conta(): void
+    {
+        $user = User::factory()->create(['google_id' => 'g-1', 'email' => 'ana@example.com']);
+        $this->googleDevolve('g-1', 'ana@example.com', 'Ana', false);
+
+        $this->get('/auth/google/callback')->assertRedirect('/');
+
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_email_de_conta_confirmada_com_outro_google_id_e_recusado(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'ana@example.com', 'google_id' => 'g-atacante',
+            'password' => Hash::make('senha-do-atacante'), 'remember_token' => 'token-fixo',
+        ]);
+        $antes = (array) DB::table('users')->where('id', $user->id)->first();
+        $this->googleDevolve('g-vitima', 'ana@example.com');
+
+        $this->get('/auth/google/callback')->assertRedirect('/login')->assertSessionHasErrors('email');
+
+        $this->assertSame($antes, (array) DB::table('users')->where('id', $user->id)->first());
+        $this->assertGuest();
+    }
+
+    public function test_email_de_conta_nao_confirmada_com_outro_google_id_e_assumido_por_completo(): void
+    {
+        // Atacante com conta ligada ao Google dele trocou o e-mail do perfil para o da vitima (fica nao confirmado).
+        $user = User::factory()->unverified()->create([
+            'email' => 'ana@example.com', 'google_id' => 'g-atacante',
+            'password' => Hash::make('senha-do-atacante'), 'remember_token' => 'token-do-atacante',
+        ]);
+        DB::table('sessions')->insert([
+            'id' => 'sessao-do-atacante', 'user_id' => $user->id, 'payload' => '', 'last_activity' => time(),
+        ]);
+        $this->googleDevolve('g-vitima', 'ana@example.com');
+
+        $this->get('/auth/google/callback')->assertRedirect('/');
+
+        $this->assertAuthenticatedAs($user);
+        $user->refresh();
+        $this->assertSame('g-vitima', $user->google_id);
+        $this->assertNull($user->password);
+        $this->assertNotSame('token-do-atacante', $user->remember_token);
+        $this->assertNotNull($user->email_verified_at);
+        $this->assertDatabaseMissing('sessions', ['id' => 'sessao-do-atacante']);
+
+        // A identidade antiga fica de fora.
+        $this->post('/logout');
+        $this->assertGuest();
+        $this->googleDevolve('g-atacante', 'outro@example.com');
+        $this->get('/auth/google/callback');
+        $this->assertNotSame($user->id, auth()->id());
+        $this->post('/logout');
+        $this->post('/login', ['email' => 'ana@example.com', 'password' => 'senha-do-atacante']);
+        $this->assertGuest();
+    }
+
+    public function test_email_com_maiusculas_vincula_a_conta_minuscula(): void
+    {
+        $user = User::factory()->create(['email' => 'ana@example.com']);
+        $this->googleDevolve('g-1', 'Ana@Example.com');
+
+        $this->get('/auth/google/callback');
+
+        $this->assertSame(1, User::count());
+        $this->assertSame('g-1', $user->fresh()->google_id);
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_nome_muito_longo_e_cortado_em_255_caracteres(): void
+    {
+        $this->googleDevolve('g-1', 'ana@example.com', str_repeat('a', 300));
+
+        $this->get('/auth/google/callback')->assertRedirect('/');
+
+        $this->assertSame(255, mb_strlen(User::firstOrFail()->name));
     }
 }
