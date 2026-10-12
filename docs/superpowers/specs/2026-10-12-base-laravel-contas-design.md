@@ -7,7 +7,7 @@ Status: aguardando revisão
 
 O Radar de Dispensas PF hoje é uma ferramenta local de uma pessoa: PHP puro, sem login, que consulta o PNCP ao vivo e guarda candidaturas numa tabela única. O objetivo é transformá-lo num SaaS gratuito, sustentado por anúncios, em que qualquer pessoa física se cadastra, salva dispensas, acompanha candidaturas e recebe ajuda para montar a proposta que enviará no sistema oficial (gov.br e demais portais de origem). O site nunca protocola proposta em nome do usuário.
 
-O SaaS foi dividido em quatro etapas, cada uma com spec e plano próprios:
+O SaaS foi dividido em cinco etapas, cada uma com spec e plano próprios:
 
 1. **Base em Laravel com contas** (este documento)
 2. Montador de proposta, com guia de cadastro da pessoa física nos sistemas oficiais
@@ -116,7 +116,7 @@ O comando `pncp:sync` roda a cada 15 minutos, sem sobreposição de execuções.
 3. Classifica cada registro com o `ClassificadorPf` e grava por `pncp_id` (insere ou atualiza), marcando `sincronizado_em`.
 4. Se o PNCP falhar no meio, o que já foi gravado permanece, o erro vai para o log e a próxima execução tenta de novo. O comando termina com código de erro.
 
-O radar lista apenas dispensas com `encerra_em` no futuro (ou nulo) e `sincronizado_em` nas últimas 24 horas. A segunda condição tira da lista avisos que o órgão retirou antes do prazo.
+O radar lista apenas dispensas com `encerra_em` no futuro (ou nulo) e `sincronizado_em` a no máximo 24 horas da última sincronização bem-sucedida. A segunda condição tira da lista avisos que o órgão retirou antes do prazo. A referência é a última sincronização bem-sucedida, e não o relógio, para que uma pane longa do PNCP não esvazie o radar; nesse caso vale o aviso de dados desatualizados.
 
 A data e hora da última sincronização bem-sucedida ficam visíveis no radar. Se ela tiver mais de 1 hora, a página mostra um aviso de que os dados podem estar desatualizados.
 
