@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'pncp' => [
+        'base' => rtrim(env('PNCP_BASE', 'https://pncp.gov.br/api/consulta/v1'), '/'),
+    ],
+
 ];
