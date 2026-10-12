@@ -50,8 +50,8 @@
   </div>
   <div class="row">
     @foreach ($categorias as $chave => $label)
-      <label class="chip" aria-pressed="{{ in_array($chave, $filtro->cats, true) ? 'true' : 'false' }}">
-        <input type="checkbox" name="cat[]" value="{{ $chave }}" @checked(in_array($chave, $filtro->cats, true)) hidden> {{ $label }}
+      <label class="chip">
+        <input type="checkbox" name="cat[]" value="{{ $chave }}" @checked(in_array($chave, $filtro->cats, true)) class="sr-only"> {{ $label }}
       </label>
     @endforeach
   </div>

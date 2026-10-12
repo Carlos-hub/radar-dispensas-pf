@@ -9,8 +9,9 @@ use App\Http\Controllers\PerfilController;
 use App\Http\Controllers\RadarController;
 use App\Http\Controllers\SitemapController;
 
+// Ids numéricos com até 18 dígitos: acima disso estouraria o bigint do PostgreSQL (erro 500 em vez de 404).
 Route::get('/', RadarController::class)->name('radar');
-Route::get('/dispensas/{dispensa}', [DispensaController::class, 'show'])->whereNumber('dispensa')->name('dispensas.show');
+Route::get('/dispensas/{dispensa}', [DispensaController::class, 'show'])->where('dispensa', '[0-9]{1,18}')->name('dispensas.show');
 
 Route::get('/sitemap.xml', [SitemapController::class, 'sitemap']);
 Route::get('/robots.txt', [SitemapController::class, 'robots']);
@@ -21,17 +22,17 @@ Route::middleware('auth')->group(function () {
 
     // Visitante clica em "Salvar": passa pelo login e cai de volta na página da dispensa.
     Route::get('/dispensas/{dispensa}/entrar', fn (\App\Models\Dispensa $dispensa) => redirect()->route('dispensas.show', $dispensa))
-        ->whereNumber('dispensa')->name('dispensas.entrar');
+        ->where('dispensa', '[0-9]{1,18}')->name('dispensas.entrar');
 
     Route::get('/candidaturas', [CandidaturaController::class, 'index'])->name('candidaturas.index');
 
     Route::middleware('throttle:candidaturas')->group(function () {
         Route::post('/dispensas/{dispensa}/candidatura', [CandidaturaController::class, 'store'])
-            ->whereNumber('dispensa')->middleware('verified')->name('candidaturas.store');
+            ->where('dispensa', '[0-9]{1,18}')->middleware('verified')->name('candidaturas.store');
         Route::patch('/candidaturas/{candidatura}', [CandidaturaController::class, 'update'])
-            ->whereNumber('candidatura')->name('candidaturas.update');
+            ->where('candidatura', '[0-9]{1,18}')->name('candidaturas.update');
         Route::delete('/candidaturas/{candidatura}', [CandidaturaController::class, 'destroy'])
-            ->whereNumber('candidatura')->name('candidaturas.destroy');
+            ->where('candidatura', '[0-9]{1,18}')->name('candidaturas.destroy');
     });
 });
 

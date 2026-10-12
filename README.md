@@ -11,6 +11,8 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+Se o seu usuário na máquina não tem UID/GID 1000 (confira com `id -u` e `id -g`), ajuste `UID` e `GID` no `.env` antes do primeiro `up --build`. Para mudar as portas locais, use `APP_PORT` e `FORWARD_DB_PORT` no `.env`.
+
 Abra **http://localhost:8081**. A primeira subida instala as dependências, cria as tabelas e busca as dispensas no PNCP. O aplicativo responde assim que os contêineres estão saudáveis, e o radar vai se preenchendo conforme a sincronização avança; ela leva cerca de seis minutos para ficar completa.
 
 | Endereço | O que é |
@@ -27,6 +29,8 @@ Abra **http://localhost:8081**. A primeira subida instala as dependências, cria
 | `docker compose exec -u www-data app php artisan pncp:sync` | Sincroniza com o PNCP agora |
 | `docker compose down` | Para tudo e mantém os dados |
 | `docker compose down -v` | Para tudo e **apaga o banco** |
+
+O banco de testes `radar_test` só é criado quando o volume do banco é criado pela primeira vez; num volume anterior a esta versão, rode `docker compose down -v` uma vez (isso apaga o banco local).
 
 Rode sempre `php`, `composer` e `artisan` com `-u www-data`. Como root, os arquivos criados ficam sem permissão de escrita para o Apache.
 
@@ -49,10 +53,11 @@ Rode sempre `php`, `composer` e `artisan` com `-u www-data`. Como root, os arqui
 
 ## Como funciona
 
-- **Sincronização:** o comando `pncp:sync` busca as dispensas do Brasil todo que encerram em até 90 dias, classifica cada uma e grava na tabela `dispensas`. Como o PNCP limita a taxa de requisições, a sincronização faz poucas consultas em paralelo, com pausas, e tenta de novo quando a resposta é HTTP 429. Uma dispensa que o PNCP para de devolver sai do radar depois de 24 horas.
+- **Sincronização:** o comando `pncp:sync` busca as dispensas do Brasil todo que encerram em até 90 dias, classifica cada uma e grava na tabela `dispensas`. Como o PNCP limita a taxa de requisições, a sincronização faz poucas consultas em paralelo, com pausas, e tenta de novo quando a resposta é HTTP 429. Uma dispensa que o PNCP para de devolver sai do radar quando ficar mais de 24 horas para trás da última sincronização bem-sucedida; se a sincronização falhar por dias, a lista continua como estava, com um aviso de dados desatualizados. Só uma sincronização roda por vez (lock de 30 minutos).
 - **Classificação:** `app/Services/ClassificadorPf.php` é uma heurística sobre o texto do aviso. Ela não substitui a leitura do aviso oficial.
 - **Radar:** público. Os filtros ficam na URL. Só o radar sem filtro e o radar por UF são indexados pelos buscadores. Quem clica em "Salvar" sem estar logado passa pelo login e volta para a página da dispensa.
-- **Contas:** e-mail e senha (com confirmação de e-mail) ou Google. Só contas confirmadas salvam dispensas. O e-mail do Google só vale quando o Google o informa como verificado, e a conta não é vinculada se já pertencer a outra identidade do Google.
+- **Links e e-mails:** os endereços gerados (e-mails de recuperação de senha, sitemap, canonical) usam sempre o host de `APP_URL`, nunca o cabeçalho `Host` da requisição; em produção, defina `APP_URL` com o endereço público.
+- **Contas:** e-mail e senha (com confirmação de e-mail) ou Google. Só contas confirmadas salvam dispensas. O e-mail do Google só vale quando o Google o informa como verificado, e a conta não é vinculada se já pertencer a outra identidade do Google. Trocar ou redefinir a senha encerra as outras sessões abertas da conta, e a troca de e-mail é limitada a 5 por hora.
 - **Candidaturas:** cada pessoa vê só as suas, com status e notas.
 
 ## Estrutura

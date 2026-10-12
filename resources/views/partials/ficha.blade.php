@@ -45,7 +45,7 @@
 
   <div class="actions">
     @if ($d->urlPncp())<a href="{{ $d->urlPncp() }}" target="_blank" rel="noopener">Aviso no PNCP</a>@endif
-    @if ($d->urlOrigem())<a href="{{ $d->urlOrigem() }}" target="_blank" rel="noopener">Enviar proposta</a>@endif
+    @if ($d->urlOrigem() && ! $d->encerrada())<a href="{{ $d->urlOrigem() }}" target="_blank" rel="noopener">Enviar proposta</a>@endif
     <span class="spacer"></span>
     @if ($cand)
       <form method="POST" action="{{ route('candidaturas.destroy', $cand) }}" data-confirmar="Remover esta candidatura? As notas serão apagadas.">

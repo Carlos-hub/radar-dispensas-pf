@@ -234,4 +234,40 @@ class CandidaturasTest extends TestCase
 
         $this->actingAs($c->user)->patchJson("/candidaturas/$c->id", ['notas' => 'demais'])->assertStatus(429);
     }
+
+    public function test_ids_gigantes_respondem_404_em_vez_de_estourar_o_banco(): void
+    {
+        $gigante = '99999999999999999999999';
+        $user = User::factory()->create();
+
+        $this->get("/dispensas/$gigante")->assertNotFound();
+        $this->actingAs($user)->get("/dispensas/$gigante/entrar")->assertNotFound();
+        $this->actingAs($user)->post("/dispensas/$gigante/candidatura")->assertNotFound();
+        $this->actingAs($user)->patch("/candidaturas/$gigante", ['status' => 'enviada'])->assertNotFound();
+        $this->actingAs($user)->delete("/candidaturas/$gigante")->assertNotFound();
+    }
+
+    public function test_card_de_dispensa_encerrada_nao_oferece_enviar_proposta(): void
+    {
+        $user = User::factory()->create();
+        $aberta = Dispensa::factory()->create(['link_origem' => 'https://aberta.example.gov.br/1']);
+        $encerrada = Dispensa::factory()->encerrada()->create(['link_origem' => 'https://encerrada.example.gov.br/2']);
+        Candidatura::factory()->for($user)->for($aberta)->create();
+        Candidatura::factory()->for($user)->for($encerrada)->create();
+
+        $this->actingAs($user)->get('/candidaturas')
+            ->assertOk()
+            ->assertSee('https://aberta.example.gov.br/1', false)
+            ->assertDontSee('https://encerrada.example.gov.br/2', false);
+    }
+
+    public function test_filtro_ativo_da_lista_usa_aria_current_e_nao_aria_pressed(): void
+    {
+        $user = User::factory()->create();
+
+        $html = $this->actingAs($user)->get('/candidaturas?status=enviada')->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('aria-pressed', $html);
+        $this->assertSame(1, substr_count($html, 'aria-current="true"'));
+    }
 }

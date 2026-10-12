@@ -11,9 +11,9 @@
 
 <div class="bar">
   <div class="row">
-    <a class="chip" href="{{ route('candidaturas.index') }}" aria-pressed="{{ $statusAtivo ? 'false' : 'true' }}">Todas <small>{{ $total }}</small></a>
+    <a class="chip" href="{{ route('candidaturas.index') }}" @if (! $statusAtivo) aria-current="true" @endif>Todas <small>{{ $total }}</small></a>
     @foreach (\App\Enums\StatusCandidatura::cases() as $s)
-      <a class="chip" href="{{ route('candidaturas.index', ['status' => $s->value]) }}" aria-pressed="{{ $statusAtivo === $s ? 'true' : 'false' }}">{{ $s->label() }} <small>{{ $contagem[$s->value] ?? 0 }}</small></a>
+      <a class="chip" href="{{ route('candidaturas.index', ['status' => $s->value]) }}" @if ($statusAtivo === $s) aria-current="true" @endif>{{ $s->label() }} <small>{{ $contagem[$s->value] ?? 0 }}</small></a>
     @endforeach
   </div>
 </div>

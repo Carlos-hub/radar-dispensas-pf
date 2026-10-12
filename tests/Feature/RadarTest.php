@@ -239,4 +239,18 @@ class RadarTest extends TestCase
 
         $this->get('/')->assertSee('Palestra de agora')->assertDontSee('Palestra de anteontem');
     }
+
+    public function test_categorias_sao_checkboxes_focaveis_e_marcados_conforme_o_filtro(): void
+    {
+        $html = $this->get('/?cat[]=ti')->assertOk()->getContent();
+
+        preg_match_all('/<input[^>]*name="cat\[\]"[^>]*>/', $html, $m);
+        $this->assertNotEmpty($m[0]);
+        foreach ($m[0] as $input) {
+            $this->assertDoesNotMatchRegularExpression('/\shidden(\s|>|=)/', $input, 'checkbox com hidden não recebe foco');
+        }
+        $this->assertMatchesRegularExpression('/<input[^>]*value="ti"[^>]*checked/', $html);
+        $this->assertDoesNotMatchRegularExpression('/<input[^>]*value="ensino"[^>]*checked/', $html);
+        $this->assertStringNotContainsString('aria-pressed', $html);
+    }
 }
