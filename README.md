@@ -11,7 +11,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Se o seu usuário na máquina não tem UID/GID 1000 (confira com `id -u` e `id -g`), ajuste `UID` e `GID` no `.env` antes do primeiro `up --build`. Para mudar as portas locais, use `APP_PORT` e `FORWARD_DB_PORT` no `.env`.
+Se o seu usuário na máquina não tem UID/GID 1000 (confira com `id -u` e `id -g`), ajuste `UID` e `GID` no `.env` antes do primeiro `up --build`. Para mudar as portas locais, use `APP_PORT` e `FORWARD_DB_PORT` no `.env`. Ao trocar `APP_PORT`, troque junto a porta em `APP_URL`: todos os endereços do site (CSS, formulários, login) são gerados a partir de `APP_URL`, então os dois precisam bater. Pelo mesmo motivo, abra o aplicativo pelo host que está em `APP_URL` (`localhost`, e não `127.0.0.1`).
 
 Abra **http://localhost:8081**. A primeira subida instala as dependências, cria as tabelas e busca as dispensas no PNCP. O aplicativo responde assim que os contêineres estão saudáveis, e o radar vai se preenchendo conforme a sincronização avança; ela leva cerca de seis minutos para ficar completa.
 

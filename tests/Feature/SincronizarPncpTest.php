@@ -343,6 +343,22 @@ class SincronizarPncpTest extends TestCase
         $this->assertSame('2026-10-20 08:00', $a2->encerra_em->format('Y-m-d H:i'));
     }
 
+    public function test_fuso_fora_da_faixa_vira_data_nula_e_nao_derruba_a_pagina(): void
+    {
+        $this->simularPncp([1 => [
+            ['dataEncerramentoProposta' => '2026-10-20T08:00:00+16:00'] + $this->registro('a-1'),
+            ['dataEncerramentoProposta' => '2026-10-20T08:00:00-03:99'] + $this->registro('a-2'),
+            ['dataEncerramentoProposta' => '2026-10-20T08:00:00-03:00'] + $this->registro('a-3'),
+        ]]);
+
+        $this->artisan('pncp:sync')->assertSuccessful();
+
+        $this->assertNull(Dispensa::where('pncp_id', 'a-1')->firstOrFail()->encerra_em);
+        $this->assertNull(Dispensa::where('pncp_id', 'a-2')->firstOrFail()->encerra_em);
+        $this->assertNotNull(Dispensa::where('pncp_id', 'a-3')->firstOrFail()->encerra_em);
+        $this->assertNotNull(Cache::get(SincronizarPncp::CHAVE_ULTIMA));
+    }
+
     public function test_valor_fora_da_faixa_vira_nulo(): void
     {
         $this->simularPncp([1 => [

@@ -97,7 +97,7 @@ class ClassificadorPf
             return null;
         }
         $texto = trim($bruto);
-        $ok = preg_match('/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}(?::?\d{2})?)?)?$/', $texto, $m);
+        $ok = preg_match('/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-](?:0\d|1[0-5])(?::?[0-5]\d)?)?)?$/', $texto, $m);
 
         return $ok && checkdate((int) $m[2], (int) $m[3], (int) $m[1]) && (int) ($m[4] ?? 0) <= 23 && (int) ($m[5] ?? 0) <= 59 && (int) ($m[6] ?? 0) <= 59
             ? $texto
