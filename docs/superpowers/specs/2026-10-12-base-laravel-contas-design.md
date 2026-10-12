@@ -66,7 +66,7 @@ Sessão e cache usam o driver `database`. Os e-mails são enviados de forma sín
 | `app/Http/Controllers/Auth/GoogleController.php` | Redirecionamento e retorno do OAuth do Google |
 | `app/Policies/CandidaturaPolicy.php` | Só o dono altera ou remove |
 
-Cadastro, login, confirmação de e-mail, recuperação de senha e a página de perfil (alterar nome, e-mail, senha e excluir a conta) vêm do Laravel Breeze na variante Blade. O login com Google usa o Laravel Socialite. As mensagens de autenticação e validação são traduzidas para `pt_BR`.
+Cadastro, login, confirmação de e-mail, recuperação de senha e alteração de nome, e-mail e senha vêm do Laravel Fortify, com telas próprias em Blade no CSS do projeto. A exclusão de conta é um controller do projeto. O Breeze foi descartado porque suas telas dependem de Tailwind e de build com Node, e ele está em modo de manutenção. O login com Google usa o Laravel Socialite. As mensagens de autenticação e validação são traduzidas para `pt_BR`.
 
 ## Dados
 
@@ -131,7 +131,8 @@ A data e hora da última sincronização bem-sucedida ficam visíveis no radar. 
 | `PATCH /candidaturas/{candidatura}` | dono | Altera status e/ou notas |
 | `DELETE /candidaturas/{candidatura}` | dono | Remove |
 | `GET /auth/google`, `GET /auth/google/callback` | visitante | Login com Google |
-| Rotas do Breeze | conforme o caso | Cadastro, login, confirmação, recuperação de senha, perfil |
+| Rotas do Fortify | conforme o caso | Cadastro, login, confirmação, recuperação de senha, alteração de dados e senha |
+| `GET /perfil`, `DELETE /perfil` | logado | Página de perfil e exclusão da conta |
 
 ### Radar (`/`)
 
