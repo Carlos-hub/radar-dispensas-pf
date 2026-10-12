@@ -173,12 +173,15 @@ class RadarTest extends TestCase
         $this->dispensa('Desconto de 50% no servico');
         $this->dispensa('Arquivo relatorio_final');
         $this->dispensa('Texto comum');
+        $this->dispensa('Desconto de 50 por cento');
+        $this->dispensa('Arquivo relatorioXfinal');
 
-        $this->get('/?q=' . urlencode('50%'))->assertOk()->assertSee('Desconto de 50%')->assertDontSee('Texto comum');
-        $this->get('/?q=' . urlencode('o_f'))->assertOk()->assertSee('relatorio_final')->assertDontSee('Texto comum');
+        $this->get('/?q=' . urlencode('50%'))->assertOk()->assertSee('Desconto de 50%')->assertDontSee('Texto comum')->assertDontSee('50 por cento');
+        $this->get('/?q=' . urlencode('o_f'))->assertOk()->assertSee('relatorio_final')->assertDontSee('Texto comum')->assertDontSee('relatorioXfinal');
+        $this->get('/?q=' . urlencode('%'))->assertOk()->assertSee('Desconto de 50%')->assertDontSee('Texto comum')->assertDontSee('50 por cento')->assertDontSee('relatorioXfinal');
         $this->get('/?q=' . urlencode("'; drop table dispensas; --"))->assertOk()->assertSee('Nenhuma dispensa neste filtro');
         $this->get('/?q=' . urlencode('\\'))->assertOk();
-        $this->assertSame(3, Dispensa::count());
+        $this->assertSame(5, Dispensa::count());
     }
 
     public function test_mostra_a_hora_da_ultima_sincronizacao(): void
