@@ -2,11 +2,12 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
-
+use App\Http\Controllers\DispensaController;
 use App\Http\Controllers\PerfilController;
+use App\Http\Controllers\RadarController;
+
+Route::get('/', RadarController::class)->name('radar');
+Route::get('/dispensas/{dispensa}', [DispensaController::class, 'show'])->whereNumber('dispensa')->name('dispensas.show');
 
 Route::middleware('auth')->group(function () {
     Route::get('/perfil', [PerfilController::class, 'show'])->name('perfil');
