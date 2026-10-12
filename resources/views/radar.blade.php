@@ -78,7 +78,7 @@
 
 <div class="list">
   @forelse ($dispensas as $d)
-    @include('partials.ficha', ['d' => $d])
+    @include('partials.ficha', ['d' => $d, 'salva' => in_array($d->id, $salvas, true)])
   @empty
     <div class="state"><strong>Nenhuma dispensa neste filtro</strong>Amplie o prazo, troque a UF ou inclua os itens a verificar.</div>
   @endforelse

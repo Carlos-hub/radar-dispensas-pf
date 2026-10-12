@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 
+use App\Http\Controllers\CandidaturaController;
 use App\Http\Controllers\DispensaController;
 use App\Http\Controllers\PerfilController;
 use App\Http\Controllers\RadarController;
@@ -16,4 +17,19 @@ Route::get('/robots.txt', [SitemapController::class, 'robots']);
 Route::middleware('auth')->group(function () {
     Route::get('/perfil', [PerfilController::class, 'show'])->name('perfil');
     Route::delete('/perfil', [PerfilController::class, 'destroy'])->name('perfil.destroy');
+
+    // Visitante clica em "Salvar": passa pelo login e cai de volta na página da dispensa.
+    Route::get('/dispensas/{dispensa}/entrar', fn (\App\Models\Dispensa $dispensa) => redirect()->route('dispensas.show', $dispensa))
+        ->whereNumber('dispensa')->name('dispensas.entrar');
+
+    Route::get('/candidaturas', [CandidaturaController::class, 'index'])->name('candidaturas.index');
+
+    Route::middleware('throttle:candidaturas')->group(function () {
+        Route::post('/dispensas/{dispensa}/candidatura', [CandidaturaController::class, 'store'])
+            ->whereNumber('dispensa')->middleware('verified')->name('candidaturas.store');
+        Route::patch('/candidaturas/{candidatura}', [CandidaturaController::class, 'update'])
+            ->whereNumber('candidatura')->name('candidaturas.update');
+        Route::delete('/candidaturas/{candidatura}', [CandidaturaController::class, 'destroy'])
+            ->whereNumber('candidatura')->name('candidaturas.destroy');
+    });
 });

@@ -43,6 +43,9 @@ class RadarController extends Controller
             'resumo' => $resumo,
             'categorias' => array_map(fn (array $c) => $c['label'], ClassificadorPf::CATEGORIAS),
             'ultimaSync' => $ultimaSync,
+            'salvas' => $request->user()
+                ? $request->user()->candidaturas()->whereIn('dispensa_id', $dispensas->pluck('id'))->pluck('dispensa_id')->all()
+                : [],
             // Só o radar sem filtro e o radar por UF entram no índice; o resto seria conteúdo duplicado.
             'indexavel' => array_diff(array_keys($request->query()), ['uf']) === []
                 && (! $request->has('uf') || $filtro->uf !== null),

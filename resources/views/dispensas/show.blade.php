@@ -52,9 +52,23 @@
     </p>
   </details>
 
+  @error('candidatura')<div class="flash erro-geral" style="grid-column:1/-1;margin:0">{{ $message }}</div>@enderror
+
   <div class="actions">
     @if ($d->urlPncp())<a href="{{ $d->urlPncp() }}" target="_blank" rel="noopener">Aviso no PNCP</a>@endif
     <span class="spacer"></span>
+    @if ($salva)
+      <a class="btn saved" href="{{ route('candidaturas.index') }}">✓ Salva</a>
+    @elseif (! $d->encerrada())
+      @auth
+        <form method="POST" action="{{ route('candidaturas.store', $d) }}">
+          @csrf
+          <button type="submit" class="btn">Salvar</button>
+        </form>
+      @else
+        <a class="btn" href="{{ route('dispensas.entrar', $d) }}" rel="nofollow">Salvar</a>
+      @endauth
+    @endif
     @if ($d->urlOrigem() && ! $d->encerrada())
       <a class="btn primary" href="{{ $d->urlOrigem() }}" target="_blank" rel="noopener">Enviar proposta no sistema oficial</a>
     @endif
