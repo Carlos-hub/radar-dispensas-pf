@@ -1,0 +1,42 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${APP_PORT:-8080}:80"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-radar}
+      DB_USER: ${DB_USER:-radar}
+      DB_PASSWORD: ${DB_PASSWORD:-radar}
+    volumes:
+      # código montado para editar sem rebuild
+      - ./public:/var/www/html/public
+      - ./src:/var/www/html/src
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-radar}
+      POSTGRES_USER: ${DB_USER:-radar}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-radar}
+      TZ: America/Sao_Paulo
+    ports:
+      # só na máquina local, para consultar com psql/DBeaver
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  dbdata:
