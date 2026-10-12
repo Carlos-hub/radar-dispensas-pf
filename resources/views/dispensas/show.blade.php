@@ -52,8 +52,6 @@
     </p>
   </details>
 
-  @error('candidatura')<div class="flash erro-geral" style="grid-column:1/-1;margin:0">{{ $message }}</div>@enderror
-
   <div class="actions">
     @if ($d->urlPncp())<a href="{{ $d->urlPncp() }}" target="_blank" rel="noopener">Aviso no PNCP</a>@endif
     <span class="spacer"></span>

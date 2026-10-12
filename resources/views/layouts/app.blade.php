@@ -40,6 +40,7 @@
   @if (session('status'))
     <div class="flash" role="status">{{ $mensagens[session('status')] ?? session('status') }}</div>
   @endif
+  @error('candidatura')<div class="flash erro-geral" role="alert">{{ $message }}</div>@enderror
   @auth
     @if (! auth()->user()->hasVerifiedEmail() && ! request()->routeIs('verification.notice'))
       <div class="flash aviso">Confirme o seu e-mail para salvar dispensas. <a href="{{ route('verification.notice') }}">Reenviar o link</a></div>

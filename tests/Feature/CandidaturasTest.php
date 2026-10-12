@@ -63,7 +63,7 @@ class CandidaturasTest extends TestCase
         $user = User::factory()->create();
         Candidatura::factory()->for($user)->for($d)->create(['status' => 'enviada', 'notas' => 'já enviei']);
 
-        $this->actingAs($user)->post("/dispensas/$d->id/candidatura")->assertRedirect();
+        $this->actingAs($user)->post("/dispensas/$d->id/candidatura")->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertSame(1, Candidatura::count());
         $c = Candidatura::firstOrFail();
@@ -89,6 +89,30 @@ class CandidaturasTest extends TestCase
             ->post("/dispensas/$d->id/candidatura")
             ->assertRedirect("/dispensas/$d->id")
             ->assertSessionHasErrors('candidatura');
+        $this->assertSame(0, Candidatura::count());
+    }
+
+    public function test_recusa_de_dispensa_encerrada_aparece_no_radar(): void
+    {
+        $d = Dispensa::factory()->encerrada()->create();
+
+        $this->actingAs(User::factory()->create())->from('/')
+            ->post("/dispensas/$d->id/candidatura")
+            ->assertRedirect('/');
+        $this->get('/')->assertSee('Esta dispensa já encerrou e não pode mais ser salva.');
+        $this->assertSame(0, Candidatura::count());
+    }
+
+    public function test_recusa_de_dispensa_encerrada_aparece_uma_vez_na_pagina_da_dispensa(): void
+    {
+        $d = Dispensa::factory()->encerrada()->create();
+
+        $this->actingAs(User::factory()->create())->from("/dispensas/$d->id")
+            ->post("/dispensas/$d->id/candidatura")
+            ->assertRedirect("/dispensas/$d->id");
+        $html = $this->get("/dispensas/$d->id")->getContent();
+
+        $this->assertSame(1, substr_count($html, 'Esta dispensa já encerrou e não pode mais ser salva.'));
         $this->assertSame(0, Candidatura::count());
     }
 

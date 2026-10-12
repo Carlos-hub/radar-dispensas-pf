@@ -45,7 +45,7 @@ class CandidaturaController extends Controller
             return back()->withErrors(['candidatura' => 'Esta dispensa já encerrou e não pode mais ser salva.']);
         }
 
-        $request->user()->candidaturas()->firstOrCreate(['dispensa_id' => $dispensa->id]);
+        $request->user()->candidaturas()->createOrFirst(['dispensa_id' => $dispensa->id]);
 
         return back()->with('status', 'Salva em Minhas candidaturas.');
     }
