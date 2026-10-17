@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Dispensa;
+use App\Services\ClassificadorEdital;
 use App\Services\ClassificadorPf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -12,6 +13,8 @@ final class FiltroRadar
 {
     public const UFS = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'];
     public const DIAS = [7, 15, 30, 60];
+    public const PARTICIPACOES = ['pf' => 'Aceita PF', 'me_epp' => 'Só empresa (ME/EPP)', 'nao_verificado' => 'Barreiras não verificadas'];
+    public const PERFIS = [ClassificadorEdital::CONSTRUIVEL => 'Construível', ClassificadorEdital::PRODUTO_PRONTO => 'Pede produto pronto'];
     private const DIAS_PADRAO = 30;
 
     /**
@@ -25,7 +28,17 @@ final class FiltroRadar
         public readonly string $q,
         public readonly array $cats,
         public readonly array $fits,
+        public readonly bool $descartados = false,
+        public readonly bool $pequenas = false,
+        public readonly ?string $participacao = null,
+        public readonly ?string $perfil = null,
     ) {}
+
+    /** Abaixo deste valor a contratação fica oculta, salvo com "pequenas=1". */
+    public static function valorMinimo(): float
+    {
+        return (float) config('radar.valor_minimo');
+    }
 
     public static function deRequest(Request $request): self
     {
@@ -61,6 +74,10 @@ final class FiltroRadar
                 is_array($cat) ? array_filter($cat, 'is_string') : [],
             )),
             fits: $fits,
+            descartados: $texto('descartados') === '1',
+            pequenas: $texto('pequenas') === '1',
+            participacao: array_key_exists($texto('participacao'), self::PARTICIPACOES) ? $texto('participacao') : null,
+            perfil: array_key_exists($texto('perfil'), self::PERFIS) ? $texto('perfil') : null,
         );
     }
 
@@ -77,6 +94,17 @@ final class FiltroRadar
     {
         return $this->recorte()
             ->whereIn('fit', $this->fits)
+            // descartados pelo classificador de editais não somem do banco: voltam com "descartados=1", com o motivo
+            ->when(! $this->descartados, fn (Builder $q) => $q->where('edital_status', '!=', ClassificadorEdital::EXCLUIDO))
+            ->when(! $this->pequenas, fn (Builder $q) => $q->where(
+                fn (Builder $w) => $w->whereNull('valor')->orWhere('valor', '>=', self::valorMinimo())
+            ))
+            ->when($this->participacao, fn (Builder $q) => match ($this->participacao) {
+                'pf' => $q->whereJsonContainsKey('barreiras->pf_aceita'),
+                'me_epp' => $q->whereJsonContainsKey('barreiras->me_epp'),
+                'nao_verificado' => $q->whereNull('barreiras'),
+            })
+            ->when($this->perfil, fn (Builder $q) => $q->where('perfil', $this->perfil))
             ->when($this->vmax, fn (Builder $q) => $q->where(
                 fn (Builder $w) => $w->whereNull('valor')->orWhere('valor', '<=', $this->vmax)
             ))

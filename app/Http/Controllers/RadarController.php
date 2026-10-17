@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Console\Commands\SincronizarPncp;
+use App\Services\ClassificadorEdital;
 use App\Services\ClassificadorPf;
 use App\Support\FiltroRadar;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class RadarController extends Controller
             'alta' => (clone $recorte)->where('fit', 'alta')->count(),
             'verificar' => (clone $recorte)->where('fit', 'verificar')->count(),
             'abertas' => (clone $recorte)->count(),
+            'descartadas' => (clone $recorte)->where('edital_status', ClassificadorEdital::EXCLUIDO)->count(),
             'estimado' => (float) (clone $filtrado)->sum('valor'),
         ];
 

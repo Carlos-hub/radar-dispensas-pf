@@ -92,6 +92,24 @@ class SincronizarPncpTest extends TestCase
         $this->assertNotNull($d->sincronizado_em);
     }
 
+    public function test_grava_a_classificacao_do_edital_sem_apagar_os_descartados(): void
+    {
+        $sistema = ['informacaoComplementar' => 'Experiência mínima de 5 (cinco) anos.', 'valorTotalEstimado' => 30000] + $this->registro('e-1', 'Desenvolvimento de sistema de protocolo');
+        $this->simularPncp([1 => [$sistema, $this->registro('e-2', 'Licença de uso do CapCut Pro')]]);
+
+        $this->artisan('pncp:sync')->assertSuccessful();
+
+        $incluido = Dispensa::where('pncp_id', 'e-1')->firstOrFail();
+        $this->assertSame('incluido', $incluido->edital_status);
+        $this->assertSame('construivel', $incluido->perfil);
+        $this->assertSame(['experiencia_anos' => 5], $incluido->barreiras);
+
+        $descartado = Dispensa::where('pncp_id', 'e-2')->firstOrFail();
+        $this->assertSame('excluido', $descartado->edital_status);
+        $this->assertSame('licenca de uso / capcut', $descartado->edital_motivo);
+        $this->assertNull($descartado->barreiras);
+    }
+
     public function test_consulta_dispensas_do_brasil_todo_com_janela_de_90_dias(): void
     {
         $this->simularPncp([1 => [$this->registro('a-1')]]);

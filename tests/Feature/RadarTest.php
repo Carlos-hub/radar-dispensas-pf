@@ -133,20 +133,22 @@ class RadarTest extends TestCase
 
     public function test_resumo_e_calculado_sobre_o_recorte_inteiro_e_nao_so_sobre_a_pagina(): void
     {
-        Dispensa::factory()->count(31)->create(['fit' => 'alta', 'valor' => 1000]);
-        Dispensa::factory()->count(2)->create(['fit' => 'verificar', 'valor' => 500]);
-        Dispensa::factory()->count(4)->create(['fit' => 'baixa', 'valor' => 9999]);
+        Dispensa::factory()->count(31)->create(['fit' => 'alta', 'valor' => 10000]);
+        Dispensa::factory()->count(2)->create(['fit' => 'verificar', 'valor' => 5000]);
+        Dispensa::factory()->count(4)->create(['fit' => 'baixa', 'valor' => 99999]);
+        Dispensa::factory()->create(['fit' => 'alta', 'valor' => 10000, 'edital_status' => 'excluido']);
 
         $r = $this->get('/')->assertOk();
 
         $r->assertViewHas('resumo', [
             'exibidas' => 33,
-            'alta' => 31,
+            'alta' => 32,
             'verificar' => 2,
-            'abertas' => 37,
-            'estimado' => 32000.0,
+            'abertas' => 38,
+            'descartadas' => 1,
+            'estimado' => 320000.0,
         ]);
-        $r->assertSee('R$ 32.000,00');
+        $r->assertSee('R$ 320.000,00');
     }
 
     public function test_sem_resultado_mostra_orientacao(): void
@@ -252,5 +254,79 @@ class RadarTest extends TestCase
         $this->assertMatchesRegularExpression('/<input[^>]*value="ti"[^>]*checked/', $html);
         $this->assertDoesNotMatchRegularExpression('/<input[^>]*value="ensino"[^>]*checked/', $html);
         $this->assertStringNotContainsString('aria-pressed', $html);
+    }
+
+    public function test_descartados_ficam_ocultos_e_voltam_com_o_motivo(): void
+    {
+        $this->dispensa('Licenca do CapCut', ['edital_status' => 'excluido', 'edital_motivo' => 'licenca de uso / capcut']);
+        $this->dispensa('Sistema de protocolo', ['edital_status' => 'incluido']);
+
+        $this->get('/')->assertSee('Sistema de protocolo')->assertDontSee('Licenca do CapCut');
+        $this->get('/?descartados=1')
+            ->assertSee('Licenca do CapCut')
+            ->assertSee('Descartado pelo objeto: licenca de uso / capcut')
+            ->assertSee('edital-excluido');
+    }
+
+    public function test_neutros_aparecem_esmaecidos(): void
+    {
+        $this->dispensa('Palestra neutra', ['edital_status' => 'neutro']);
+
+        $this->get('/')->assertSee('Palestra neutra')->assertSee('edital-neutro');
+    }
+
+    public function test_esconde_valor_abaixo_do_minimo_e_mantem_os_sigilosos(): void
+    {
+        $this->dispensa('Servico de 4999', ['valor' => 4999]);
+        $this->dispensa('Servico de 5000', ['valor' => 5000]);
+        $this->dispensa('Servico sem valor', ['valor' => null]);
+
+        $this->get('/')->assertDontSee('Servico de 4999')->assertSee('Servico de 5000')->assertSee('Servico sem valor');
+        $this->get('/?pequenas=1')->assertSee('Servico de 4999');
+    }
+
+    public function test_valor_minimo_vem_da_configuracao(): void
+    {
+        config(['radar.valor_minimo' => 20000]);
+        $this->dispensa('Servico de 10000', ['valor' => 10000]);
+
+        $this->get('/')->assertDontSee('Servico de 10000');
+    }
+
+    public function test_mostra_selos_de_barreira_e_perfil(): void
+    {
+        $this->dispensa('Sistema com barreiras', [
+            'edital_status' => 'incluido', 'perfil' => 'construivel', 'revisar_misto' => true,
+            'barreiras' => ['me_epp' => true, 'experiencia_anos' => 5],
+        ]);
+        $this->dispensa('Sistema sem texto', ['barreiras' => null]);
+
+        $this->get('/')
+            ->assertSee('Exclusivo ME/EPP')
+            ->assertSee('Atestado 5 anos')
+            ->assertSee('Construível')
+            ->assertSee('Revisar: misto')
+            ->assertSee('Barreiras não verificadas');
+    }
+
+    public function test_filtra_por_quem_pode_participar(): void
+    {
+        $this->dispensa('Edital aceita PF', ['barreiras' => ['pf_aceita' => true]]);
+        $this->dispensa('Edital so ME EPP', ['barreiras' => ['me_epp' => true, 'atestado' => true]]);
+        $this->dispensa('Edital sem texto', ['barreiras' => null]);
+
+        $this->get('/?participacao=pf')->assertSee('Edital aceita PF')->assertDontSee('Edital so ME EPP')->assertDontSee('Edital sem texto');
+        $this->get('/?participacao=me_epp')->assertSee('Edital so ME EPP')->assertDontSee('Edital aceita PF')->assertDontSee('Edital sem texto');
+        $this->get('/?participacao=nao_verificado')->assertSee('Edital sem texto')->assertDontSee('Edital aceita PF');
+        $this->get('/?participacao=xyz')->assertSee('Edital aceita PF')->assertSee('Edital sem texto');
+    }
+
+    public function test_filtra_por_perfil(): void
+    {
+        $this->dispensa('Edital construivel', ['edital_status' => 'incluido', 'perfil' => 'construivel']);
+        $this->dispensa('Edital produto pronto', ['edital_status' => 'incluido', 'perfil' => 'produto_pronto']);
+
+        $this->get('/?perfil=construivel')->assertSee('Edital construivel')->assertDontSee('Edital produto pronto');
+        $this->get('/?perfil=produto_pronto')->assertSee('Edital produto pronto')->assertDontSee('Edital construivel');
     }
 }

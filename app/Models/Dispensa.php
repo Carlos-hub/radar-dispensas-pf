@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\Fit;
+use App\Services\ClassificadorEdital;
+use App\Support\FiltroRadar;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +25,8 @@ class Dispensa extends Model
     {
         return [
             'categorias' => 'array',
+            'barreiras' => 'array',
+            'revisar_misto' => 'boolean',
             'fit' => Fit::class,
             'valor' => 'float',
             'abre_em' => 'datetime',
@@ -78,6 +82,46 @@ class Dispensa extends Model
     {
         return $this->valor ? 'R$ ' . number_format($this->valor, 2, ',', '.') : 'valor sigiloso';
     }
+
+    public function descartada(): bool
+    {
+        return $this->edital_status === ClassificadorEdital::EXCLUIDO;
+    }
+
+    /**
+     * Selos do classificador de editais: revisão de objeto misto, perfil e barreiras de habilitação.
+     *
+     * @return list<array{txt: string, cls: string}>
+     */
+    public function selos(): array
+    {
+        $selos = [];
+        if ($this->revisar_misto) {
+            $selos[] = ['txt' => 'Revisar: misto', 'cls' => 'alerta'];
+        }
+        if ($this->perfil) {
+            $selos[] = ['txt' => FiltroRadar::PERFIS[$this->perfil] ?? $this->perfil, 'cls' => ''];
+        }
+        if ($this->barreiras === null) {
+            $selos[] = ['txt' => 'Barreiras não verificadas', 'cls' => 'neutro'];
+        }
+        foreach ($this->barreiras ?? [] as $chave => $valor) {
+            $selos[] = match ($chave) {
+                'experiencia_anos' => ['txt' => "Atestado $valor anos", 'cls' => 'alerta'],
+                'pf_aceita' => ['txt' => 'Aceita PF', 'cls' => 'ok'],
+                default => ['txt' => self::BARREIRAS[$chave] ?? $chave, 'cls' => 'alerta'],
+            };
+        }
+
+        return $selos;
+    }
+
+    private const BARREIRAS = [
+        'me_epp' => 'Exclusivo ME/EPP',
+        'atestado' => 'Exige atestado',
+        'balanco' => 'Exige balanço',
+        'registro_profissional' => 'Registro profissional',
+    ];
 
     public function urlPncp(): ?string
     {

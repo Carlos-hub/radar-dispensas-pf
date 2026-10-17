@@ -95,6 +95,13 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .why { margin: 0; font-size: 13px; color: var(--muted); }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .tag { font-size: 12px; font-weight: 500; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 1px 8px; }
+.tag.alerta { color: var(--warn); background: var(--warn-soft); }
+.tag.ok { color: var(--ok); background: var(--accent-soft); }
+.tag.neutro { color: var(--off); background: var(--off-soft); }
+.card.edital-neutro { opacity: .7; }
+.card.edital-excluido { opacity: .55; }
+.card.edital-neutro:hover, .card.edital-excluido:hover, .card.edital-neutro:focus-within, .card.edital-excluido:focus-within { opacity: 1; }
+.why.descarte { color: var(--urgent); }
 
 .side { display: grid; gap: 6px; justify-items: end; align-content: start; text-align: right; }
 .valor { font: 500 17px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }

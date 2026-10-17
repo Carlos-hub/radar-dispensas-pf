@@ -69,6 +69,7 @@ class SincronizarPncp extends Command
                     // string decimal: o float vira notação científica (1.0E+13) na conversão e estoura numeric(15,2)
                     $linha['valor'] = $linha['valor'] === null ? null : number_format($linha['valor'], 2, '.', '');
                     $linha['categorias'] = json_encode($linha['categorias']);
+                    $linha['barreiras'] = $linha['barreiras'] === null ? null : json_encode((object) $linha['barreiras']);
                     $linha['sincronizado_em'] = $agora;
                     $linhas[$linha['pncp_id']] = $linha;   // a chave evita o mesmo id duas vezes no mesmo upsert
                 }

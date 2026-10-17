@@ -43,6 +43,22 @@
     <label class="f">Valor máximo (R$)
       <input name="vmax" type="number" min="0" step="1000" placeholder="sem limite" value="{{ $filtro->vmax }}">
     </label>
+    <label class="f">Quem pode participar
+      <select name="participacao">
+        <option value="">Todos</option>
+        @foreach (\App\Support\FiltroRadar::PARTICIPACOES as $valor => $label)
+          <option value="{{ $valor }}" @selected($filtro->participacao === $valor)>{{ $label }}</option>
+        @endforeach
+      </select>
+    </label>
+    <label class="f">Perfil
+      <select name="perfil">
+        <option value="">Todos</option>
+        @foreach (\App\Support\FiltroRadar::PERFIS as $valor => $label)
+          <option value="{{ $valor }}" @selected($filtro->perfil === $valor)>{{ $label }}</option>
+        @endforeach
+      </select>
+    </label>
     <label class="f grow">Buscar no objeto
       <input name="q" type="search" maxlength="100" placeholder="ex.: Laravel, palestra, Chapecó" value="{{ $filtro->q }}">
     </label>
@@ -60,6 +76,8 @@
     <label class="toggle"><input type="checkbox" name="verificar" value="1" @checked(in_array('verificar', $filtro->fits, true))> Incluir "verificar"</label>
     <label class="toggle"><input type="checkbox" name="baixa" value="1" @checked(in_array('baixa', $filtro->fits, true))> Incluir baixa aderência</label>
     <label class="toggle"><input type="checkbox" name="fora" value="1" @checked(in_array('fora', $filtro->fits, true))> Incluir bens e engenharia</label>
+    <label class="toggle"><input type="checkbox" name="descartados" value="1" @checked($filtro->descartados)> Mostrar descartados</label>
+    <label class="toggle"><input type="checkbox" name="pequenas" value="1" @checked($filtro->pequenas)> Incluir abaixo de R$ {{ number_format(\App\Support\FiltroRadar::valorMinimo(), 0, ',', '.') }}</label>
   </div>
 </form>
 
@@ -72,6 +90,7 @@
   <span class="stat"><b>{{ $resumo['alta'] }}</b>fit PF</span>
   <span class="stat"><b>{{ $resumo['verificar'] }}</b>a verificar</span>
   <span class="stat"><b>{{ $resumo['abertas'] }}</b>abertas no recorte</span>
+  <span class="stat"><b>{{ $resumo['descartadas'] }}</b>descartadas pelo objeto</span>
   <span class="stat"><b>R$ {{ number_format($resumo['estimado'], 2, ',', '.') }}</b>estimado exibido</span>
   @if ($ultimaSync)<span class="when">Atualizado {{ $ultimaSync->format('d/m H:i') }}</span>@endif
 </div>

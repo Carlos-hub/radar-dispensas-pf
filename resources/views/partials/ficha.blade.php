@@ -3,11 +3,14 @@
     $cand = $cand ?? null;
     $salva = $salva ?? false;
 @endphp
-<article class="card {{ $cand ? 'st-' . $cand->status->value : 'fit-' . $d->fit->value }}">
+<article class="card {{ $cand ? 'st-' . $cand->status->value : 'fit-' . $d->fit->value }} edital-{{ $d->edital_status }}">
   <div>
     <div class="meta"><span>{{ $d->orgao }}</span><span>{{ $d->municipio }}/{{ $d->uf }}</span><span>{{ $d->esfera }}</span></div>
     <h2 class="obj"><a href="{{ route('dispensas.show', $d) }}">{{ $d->objeto }}</a></h2>
     <p class="why">{{ $d->motivo }}</p>
+    @if ($d->descartada())
+      <p class="why descarte">Descartado pelo objeto: {{ $d->edital_motivo }}</p>
+    @endif
     @if ($d->categorias)
       <div class="tags">
         @foreach ($d->categorias as $c)
@@ -15,6 +18,7 @@
         @endforeach
       </div>
     @endif
+    @include('partials.selos', ['d' => $d])
   </div>
   <div class="side">
     <span class="valor {{ $d->valor ? '' : 'sigiloso' }}">{{ $d->valorTexto() }}</span>

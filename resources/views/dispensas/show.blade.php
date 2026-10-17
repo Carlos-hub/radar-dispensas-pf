@@ -19,6 +19,7 @@
         @endforeach
       </div>
     @endif
+    @include('partials.selos', ['d' => $d])
   </div>
   <div class="side">
     <span class="valor {{ $d->valor ? '' : 'sigiloso' }}">{{ $d->valorTexto() }}</span>
@@ -33,6 +34,9 @@
   <div class="track">
     <div>
       <p class="why"><strong>Aderência para pessoa física:</strong> {{ $d->motivo }}</p>
+      @if ($d->descartada())
+        <p class="why descarte">Descartado pelo objeto: {{ $d->edital_motivo }}</p>
+      @endif
       <p class="why">A classificação é automática, feita a partir do texto do aviso, e não substitui a leitura do aviso oficial e do termo de referência.</p>
     </div>
   </div>

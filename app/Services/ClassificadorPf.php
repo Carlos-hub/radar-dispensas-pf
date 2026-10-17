@@ -22,6 +22,13 @@ class ClassificadorPf
 
     private const ESFERAS = ['F' => 'Federal', 'E' => 'Estadual', 'M' => 'Municipal', 'D' => 'Distrital', 'N' => 'Não informada'];
 
+    private ClassificadorEdital $edital;
+
+    public function __construct(?ClassificadorEdital $edital = null)
+    {
+        $this->edital = $edital ?? new ClassificadorEdital;
+    }
+
     /** Recebe um registro bruto do PNCP e devolve uma linha da tabela dispensas. */
     public function classificar(array $c): array
     {
@@ -76,7 +83,7 @@ class ClassificadorPf
             'categorias' => $categorias,
             'fit' => $fit->value,
             'motivo' => $motivo,
-        ];
+        ] + $this->edital->classificar($objeto, $complemento, $valor);
     }
 
     /** Maior valor que cabe em numeric(15,2). */
