@@ -39,8 +39,11 @@ class ClassificadorEdital
     {
         $obj = self::normalizar($objeto);
 
-        $excluidos = $this->casados($obj, array_merge(...array_values($this->config['exclusao'])));
+        $porGrupo = array_map(fn (array $termos) => $this->casados($obj, $termos), $this->config['exclusao']);
+        $excluidos = array_merge(...array_values($porGrupo));
         $misto = $excluidos && $this->casados($obj, $this->config['excecao_exclusao']);
+        $gruposDeProduto = array_intersect_key($porGrupo, array_flip($this->config['perfil']['produto_pronto_grupos_exclusao'] ?? []));
+        $licencaResgatada = $misto && array_merge([], ...array_values($gruposDeProduto)) !== [];
         $incluidos = $this->casados($obj, $this->config['inclusao']);
 
         [$status, $motivo] = match (true) {
@@ -54,7 +57,7 @@ class ClassificadorEdital
             'edital_motivo' => $motivo,
             'revisar_misto' => $misto,
             'barreiras' => trim($complemento) === '' ? null : $this->barreiras(self::normalizar("$objeto $complemento")),
-            'perfil' => $status === self::INCLUIDO ? $this->perfil($obj, $valor) : null,
+            'perfil' => $status === self::INCLUIDO ? $this->perfil($obj, $valor, $licencaResgatada) : null,
         ];
     }
 
@@ -101,13 +104,13 @@ class ClassificadorEdital
         return $achadas;
     }
 
-    private function perfil(string $obj, ?float $valor): ?string
+    private function perfil(string $obj, ?float $valor, bool $licencaResgatada): ?string
     {
         $regras = $this->config['perfil'];
         $termos = count($this->casados($obj, $regras['produto_pronto_termos']));
 
         return match (true) {
-            $termos >= $regras['produto_pronto_minimo_termos'] => self::PRODUTO_PRONTO,
+            $licencaResgatada, $termos >= $regras['produto_pronto_minimo_termos'] => self::PRODUTO_PRONTO,
             $termos === 0 && $valor !== null && $valor >= $regras['construivel_valor_minimo'] => self::CONSTRUIVEL,
             default => null,
         };

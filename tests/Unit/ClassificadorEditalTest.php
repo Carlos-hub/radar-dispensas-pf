@@ -47,24 +47,30 @@ class ClassificadorEditalTest extends TestCase
         $this->assertSame(ClassificadorEdital::CONSTRUIVEL, $r['perfil']);
     }
 
-    public function test_8_licenciamento_com_manutencao_de_sistema_e_misto(): void
+    public function test_8_licenciamento_com_manutencao_de_sistema_e_misto_e_produto_pronto(): void
     {
         $r = $this->classificar('licenciamento de uso e manutenção de sistema integrado de educação', valor: 60000);
 
         $this->assertSame(ClassificadorEdital::INCLUIDO, $r['edital_status']);
         $this->assertTrue($r['revisar_misto']);
+        $this->assertSame(ClassificadorEdital::PRODUTO_PRONTO, $r['perfil']);
     }
 
-    public function test_8_licenciamento_com_manutencao_de_sistema_e_produto_pronto(): void
+    public function test_manutencao_sozinha_nao_salva_revenda(): void
     {
-        $r = $this->classificar('licenciamento de uso e manutenção de sistema integrado de educação', valor: 60000);
+        $r = $this->classificar('Licença de uso e manutenção de antivírus');
 
-        if ($r['perfil'] !== ClassificadorEdital::PRODUTO_PRONTO) {
-            // Nenhum dos termos de produto pronto aparece neste objeto e o PNCP não informa valor mensal:
-            // pelas regras atuais o perfil sai "construivel". Pendente de decisão sobre uma regra nova.
-            $this->markTestIncomplete("Esperado produto_pronto; as regras atuais dão {$r['perfil']}.");
-        }
-        $this->assertSame(ClassificadorEdital::PRODUTO_PRONTO, $r['perfil']);
+        $this->assertSame(ClassificadorEdital::EXCLUIDO, $r['edital_status']);
+        $this->assertFalse($r['revisar_misto']);
+    }
+
+    public function test_fabricante_salvo_pela_excecao_nao_vira_produto_pronto(): void
+    {
+        // só licença resgatada indica produto existente; integrar com um fabricante é serviço próprio
+        $r = $this->classificar('Desenvolvimento de integração com Google Agenda', valor: 30000);
+
+        $this->assertTrue($r['revisar_misto']);
+        $this->assertSame(ClassificadorEdital::CONSTRUIVEL, $r['perfil']);
     }
 
     public function test_9_participacao_exclusiva_de_me_epp(): void

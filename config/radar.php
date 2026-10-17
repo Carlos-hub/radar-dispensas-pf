@@ -25,7 +25,7 @@ return [
     ],
 
     // Vence a exclusão: o item não é excluído e ganha o selo "revisar: misto".
-    'excecao_exclusao' => ['desenvolvimento', 'customizacao', 'integracao', 'manutencao'],
+    'excecao_exclusao' => ['desenvolvimento', 'customizacao', 'integracao', 'manutencao de sistema'],
 
     // Perfil de serviço próprio: casou ao menos um, status "incluido"; nem inclusão nem exclusão, "neutro".
     'inclusao' => [
@@ -54,6 +54,8 @@ return [
         // incluído e com pelo menos esta quantidade dos termos abaixo: pede produto já existente
         'produto_pronto_minimo_termos' => 3,
         'produto_pronto_termos' => ['modulo', 'migracao', 'aplicativo movel', 'educacenso', 'erp', 'multicanal', 'omnichannel'],
+        // objeto misto com termo destes grupos de exclusão (licença salva pela exceção): o sistema licenciado já existe
+        'produto_pronto_grupos_exclusao' => ['revenda_licenca'],
     ],
 
     // O radar esconde por padrão contratações abaixo deste valor (as de valor sigiloso continuam visíveis).
